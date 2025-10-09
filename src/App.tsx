@@ -30,7 +30,11 @@ export default function EmployeeInspectionSystem() {
     { username: "viewer", password: "view123", role: "viewer", name: "Глядач" }
   ]);
 
-  const [currentUser, setCurrentUser] = useState(null);
+  // Відновлення сесії користувача з LocalStorage
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedUser = localStorage.getItem('currentUser');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -38,6 +42,15 @@ export default function EmployeeInspectionSystem() {
   const [showActivityLog, setShowActivityLog] = useState(false);
 
   const [activityLog, setActivityLog] = useState([]);
+
+  // Збереження сесії користувача при зміні
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('currentUser');
+    }
+  }, [currentUser]);
   const [activeView, setActiveView] = useState('list');
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [currentInspection, setCurrentInspection] = useState({});
