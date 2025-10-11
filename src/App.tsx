@@ -1068,7 +1068,7 @@ export default function EmployeeInspectionSystem() {
             <select
               value={selectedDepartment}
               onChange={(e) => setSelectedDepartment(e.target.value)}
-              className="bg-white/20 backdrop-blur text-white px-4 py-2 rounded-lg font-semibold outline-none cursor-pointer"
+              className="bg-white/20 backdrop-blur text-white px-4 py-2 rounded-lg font-semibold outline-none cursor-pointer [&>option]:text-slate-800 [&>option]:bg-white"
             >
               <option value="all">Всі відділи</option>
               {departments.map(dept => (

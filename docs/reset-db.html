@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔄 Скидання Бази Даних W-Garage</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 24px;
+            padding: 48px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            font-size: 32px;
+            font-weight: 900;
+            color: #1e293b;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .warning {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 24px 0;
+        }
+        
+        .warning h3 {
+            color: #92400e;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        
+        .warning p {
+            color: #78350f;
+            font-size: 14px;
+        }
+        
+        .info {
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 24px 0;
+        }
+        
+        .info h3 {
+            color: #1e40af;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        
+        .info ul {
+            margin-left: 20px;
+            color: #1e3a8a;
+        }
+        
+        .info li {
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        
+        .status {
+            background: #f1f5f9;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 24px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #cbd5e1;
+        }
+        
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        
+        .label {
+            color: #64748b;
+            font-weight: 600;
+        }
+        
+        .value {
+            color: #0f172a;
+            font-weight: 700;
+        }
+        
+        .value.old {
+            color: #dc2626;
+        }
+        
+        .value.new {
+            color: #16a34a;
+        }
+        
+        button {
+            width: 100%;
+            padding: 16px 32px;
+            font-size: 18px;
+            font-weight: 700;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 8px 0;
+        }
+        
+        .btn-reset {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+        
+        .btn-reset:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
+        }
+        
+        .btn-back {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+        
+        .btn-back:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+        }
+        
+        .success {
+            background: #dcfce7;
+            border-left: 4px solid #16a34a;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 24px 0;
+            display: none;
+        }
+        
+        .success h3 {
+            color: #166534;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        
+        .success p {
+            color: #14532d;
+            font-size: 14px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Скидання Бази Даних</h1>
+        <p style="text-align: center; color: #64748b; margin-bottom: 24px;">
+            W-Garage Inspection System
+        </p>
+        
+        <div class="warning">
+            <h3>⚠️ УВАГА!</h3>
+            <p>Ви видалите всі дані зі старої системи (1000 згенерованих користувачів) та створите нову базу з <strong>33 реальними співробітниками W-Garage</strong>.</p>
+        </div>
+        
+        <div class="status" id="currentStatus">
+            <div class="status-item">
+                <span class="label">Поточний стан:</span>
+                <span class="value old" id="currentUsers">Завантаження...</span>
+            </div>
+            <div class="status-item">
+                <span class="label">Співробітників:</span>
+                <span class="value old" id="currentEmployees">Завантаження...</span>
+            </div>
+            <div class="status-item">
+                <span class="label">Розмір даних:</span>
+                <span class="value old" id="dataSize">Завантаження...</span>
+            </div>
+        </div>
+        
+        <div class="info">
+            <h3>✅ Після скидання:</h3>
+            <ul>
+                <li><strong>3 адміністратори</strong>: Валерій, Вікторія, admin</li>
+                <li><strong>5 інспекторів</strong>: Ігор П., Юлія, Володимир Г., Володимир Щ., Ігор В.</li>
+                <li><strong>25 співробітників</strong>: топливщики, менеджери, механіки, бухгалтери</li>
+                <li><strong>ВСЬОГО: 33 користувачів</strong></li>
+            </ul>
+        </div>
+        
+        <button class="btn-reset" onclick="resetDatabase()">
+            🗑️ СКИНУТИ БАЗУ ДАНИХ
+        </button>
+        
+        <button class="btn-back" onclick="goBack()">
+            ← Повернутися на головну
+        </button>
+        
+        <div class="success" id="successMessage">
+            <h3>✅ Успішно!</h3>
+            <p>База даних скинута. Створено 33 користувачів. Сторінка перезавантажиться через 3 секунди...</p>
+        </div>
+    </div>
+    
+    <script>
+        // Відображення поточного стану
+        function displayCurrentStatus() {
+            try {
+                const users = localStorage.getItem('wgarage_users');
+                const employees = localStorage.getItem('wgarage_employees');
+                
+                if (users) {
+                    const usersData = JSON.parse(users);
+                    document.getElementById('currentUsers').textContent = `${usersData.length} користувачів`;
+                    document.getElementById('currentUsers').className = usersData.length > 100 ? 'value old' : 'value new';
+                } else {
+                    document.getElementById('currentUsers').textContent = 'Немає даних';
+                }
+                
+                if (employees) {
+                    const employeesData = JSON.parse(employees);
+                    document.getElementById('currentEmployees').textContent = `${employeesData.length} співробітників`;
+                } else {
+                    document.getElementById('currentEmployees').textContent = 'Немає даних';
+                }
+                
+                // Розмір даних
+                let totalSize = 0;
+                for (let key in localStorage) {
+                    if (key.startsWith('wgarage_')) {
+                        totalSize += localStorage[key].length;
+                    }
+                }
+                const sizeKB = (totalSize / 1024).toFixed(2);
+                document.getElementById('dataSize').textContent = `${sizeKB} KB`;
+                
+            } catch (e) {
+                console.error('Помилка читання даних:', e);
+            }
+        }
+        
+        // Скидання бази даних
+        function resetDatabase() {
+            if (!confirm('Ви впевнені? Всі дані будуть видалені!')) {
+                return;
+            }
+            
+            try {
+                // Видаляємо всі ключі W-Garage
+                const keysToRemove = [];
+                for (let key in localStorage) {
+                    if (key.startsWith('wgarage_') || key === 'currentUser') {
+                        keysToRemove.push(key);
+                    }
+                }
+                
+                keysToRemove.forEach(key => {
+                    localStorage.removeItem(key);
+                    console.log(`✅ Видалено: ${key}`);
+                });
+                
+                // Показуємо повідомлення про успіх
+                document.getElementById('successMessage').style.display = 'block';
+                document.querySelector('.btn-reset').disabled = true;
+                document.querySelector('.btn-reset').style.opacity = '0.5';
+                
+                // Оновлюємо статус
+                setTimeout(() => {
+                    displayCurrentStatus();
+                }, 500);
+                
+                // Перезавантажуємо сторінку
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 3000);
+                
+            } catch (e) {
+                alert('Помилка скидання: ' + e.message);
+                console.error(e);
+            }
+        }
+        
+        // Повернення на головну
+        function goBack() {
+            window.location.href = '/';
+        }
+        
+        // Ініціалізація
+        displayCurrentStatus();
+    </script>
+</body>
+</html>

@@ -102,16 +102,25 @@ class DatabaseManager {
 
   private initializeDatabase() {
     const isInitialized = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
+    const savedUsers = this.getFromStorage<User[]>(STORAGE_KEYS.USERS);
     
-    if (!isInitialized) {
-      console.log('Ініціалізація бази даних W-Garage...');
+    // Перевірка: якщо в базі більше 100 користувачів - скидаємо до реальних даних
+    const needsReset = savedUsers && savedUsers.length > 100;
+    
+    if (!isInitialized || needsReset) {
+      if (needsReset) {
+        console.log('⚠️ Виявлено стару базу з 1000 користувачів. Скидання до 33 реальних...');
+      } else {
+        console.log('Ініціалізація бази даних W-Garage...');
+      }
+      
       const users = realUsers;
       const employees = convertUsersToEmployees(realUsers);
       
       this.saveToStorage(STORAGE_KEYS.USERS, users);
       this.saveToStorage(STORAGE_KEYS.EMPLOYEES, employees);
       this.saveToStorage(STORAGE_KEYS.ACTIVITY_LOG, []);
-      localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
+      localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'v2.0'); // Версія бази даних
       
       console.log(`✅ База даних створена: ${users.length} користувачів, ${employees.length} співробітників`);
     }
