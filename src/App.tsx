@@ -58,6 +58,10 @@ export default function EmployeeInspectionSystem() {
   const [showAccessManagement, setShowAccessManagement] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   
+  // Редагування перевірки
+  const [editingInspection, setEditingInspection] = useState(null);
+  const [editingInspectionIndex, setEditingInspectionIndex] = useState(null);
+  
   const [newEmployeeName, setNewEmployeeName] = useState("");
   const [newEmployeePosition, setNewEmployeePosition] = useState("");
   const [newEmployeeDepartment, setNewEmployeeDepartment] = useState("");
@@ -300,6 +304,113 @@ export default function EmployeeInspectionSystem() {
       db.deleteEmployee(employeeId);
       setEmployees(db.getAllEmployees());
       addToActivityLog("Видалено співробітника", `${employeeName} - видалив: ${currentUser.name}`);
+    }
+  };
+
+  // Редагування перевірки
+  const startEditInspection = (inspection, index) => {
+    if (!canEdit) {
+      alert("У вас немає прав для редагування перевірок!");
+      return;
+    }
+    setEditingInspection({ ...inspection });
+    setEditingInspectionIndex(index);
+  };
+
+  const toggleEditInspectionItem = (itemIndex) => {
+    setEditingInspection(prev => ({
+      ...prev,
+      checkedItems: {
+        ...prev.checkedItems,
+        [itemIndex]: !prev.checkedItems[itemIndex]
+      }
+    }));
+  };
+
+  const calculateEditingScore = () => {
+    if (!editingInspection) return 100;
+    const total = editingInspection.totalItems;
+    const errors = Object.values(editingInspection.checkedItems).filter(Boolean).length;
+    return total > 0 ? Math.round(((total - errors) / total) * 100) : 100;
+  };
+
+  const saveEditedInspection = () => {
+    const newScore = calculateEditingScore();
+    const errors = [];
+    
+    Object.keys(editingInspection.checkedItems).forEach(index => {
+      if (editingInspection.checkedItems[index]) {
+        errors.push(selectedEmployee.checklist[index]);
+      }
+    });
+
+    const updatedInspection = {
+      ...editingInspection,
+      score: newScore,
+      errors: errors
+    };
+
+    const updatedInspections = [...selectedEmployee.inspections];
+    const realIndex = selectedEmployee.inspections.length - 1 - editingInspectionIndex;
+    updatedInspections[realIndex] = updatedInspection;
+
+    const updatedEmployee = {
+      ...selectedEmployee,
+      inspections: updatedInspections
+    };
+
+    db.updateEmployee(updatedEmployee);
+    setEmployees(db.getAllEmployees());
+    setSelectedEmployee(updatedEmployee);
+    
+    addToActivityLog("Відредаговано перевірку", `${selectedEmployee.name}: оновлено до ${newScore}% - редагував: ${currentUser.name}`);
+    
+    setEditingInspection(null);
+    setEditingInspectionIndex(null);
+  };
+
+  const deleteInspection = (index) => {
+    if (!canEdit) {
+      alert("У вас немає прав для видалення перевірок!");
+      return;
+    }
+
+    const confirmed = confirm("Ви впевнені, що хочете видалити цю перевірку?");
+    if (confirmed) {
+      const realIndex = selectedEmployee.inspections.length - 1 - index;
+      const updatedInspections = selectedEmployee.inspections.filter((_, i) => i !== realIndex);
+
+      const updatedEmployee = {
+        ...selectedEmployee,
+        inspections: updatedInspections
+      };
+
+      db.updateEmployee(updatedEmployee);
+      setEmployees(db.getAllEmployees());
+      setSelectedEmployee(updatedEmployee);
+      
+      addToActivityLog("Видалено перевірку", `${selectedEmployee.name} - видалив: ${currentUser.name}`);
+    }
+  };
+
+  const clearAllInspections = () => {
+    if (currentUser?.role !== "admin") {
+      alert("Тільки адміністратор може очистити всю історію!");
+      return;
+    }
+
+    const confirmed = confirm(`Ви впевнені, що хочете видалити ВСІ ${selectedEmployee.inspections.length} перевірок для ${selectedEmployee.name}?`);
+    if (confirmed) {
+      const updatedEmployee = {
+        ...selectedEmployee,
+        inspections: []
+      };
+
+      db.updateEmployee(updatedEmployee);
+      setEmployees(db.getAllEmployees());
+      setSelectedEmployee(updatedEmployee);
+      
+      addToActivityLog("Очищено всю історію", `${selectedEmployee.name} - очистив: ${currentUser.name}`);
     }
   };
 
@@ -588,6 +699,99 @@ export default function EmployeeInspectionSystem() {
 
   // Employee History Modal
   if (showEmployeeHistory && selectedEmployee) {
+    // Якщо редагуємо перевірку
+    if (editingInspection !== null) {
+      const editingScore = calculateEditingScore();
+      
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-800">Редагування перевірки</h2>
+                  <p className="text-slate-600">{selectedEmployee.name} - {editingInspection.date}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingInspection(null);
+                    setEditingInspectionIndex(null);
+                  }}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition"
+                >
+                  <X className="w-6 h-6 text-slate-600" />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <SpeedometerDisplay score={editingScore} />
+                <div className="text-center mt-4">
+                  <p className="text-slate-600">
+                    {Object.values(editingInspection.checkedItems).filter(Boolean).length} помилок з {editingInspection.totalItems} пунктів
+                  </p>
+                  <p className="text-sm text-red-500 font-semibold mt-1">
+                    ⚠️ Галочка = помилка = мінус бали
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                <h3 className="text-xl font-bold text-slate-800 mb-4">Перевірка параметрів</h3>
+                <div className="space-y-2">
+                  {selectedEmployee.checklist.map((item, index) => (
+                    <label
+                      key={index}
+                      className="flex items-center gap-4 p-4 rounded-xl hover:bg-slate-50 cursor-pointer transition-all group"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editingInspection.checkedItems[index] || false}
+                        onChange={() => toggleEditInspectionItem(index)}
+                        className="hidden"
+                      />
+                      {editingInspection.checkedItems[index] ? (
+                        <CheckCircle2 className="w-6 h-6 text-red-500 flex-shrink-0" />
+                      ) : (
+                        <Circle className="w-6 h-6 text-green-300 group-hover:text-green-400 flex-shrink-0" />
+                      )}
+                      <span className="text-slate-400 font-semibold text-sm min-w-[2rem]">
+                        {index + 1}
+                      </span>
+                      <span className={`flex-1 font-medium ${
+                        editingInspection.checkedItems[index] ? 'text-red-600 font-bold' : 'text-slate-700'
+                      }`}>
+                        {item}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={saveEditedInspection}
+                  className="flex-1 bg-green-500 text-white py-3 rounded-xl font-bold hover:bg-green-600 transition flex items-center justify-center gap-2"
+                >
+                  <Save className="w-5 h-5" />
+                  Зберегти зміни ({editingScore}%)
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingInspection(null);
+                    setEditingInspectionIndex(null);
+                  }}
+                  className="px-6 bg-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-300 transition"
+                >
+                  Скасувати
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Звичайний перегляд історії
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
         <div className="max-w-5xl mx-auto">
@@ -601,12 +805,23 @@ export default function EmployeeInspectionSystem() {
                   <p className="text-sm text-blue-600 font-semibold">{selectedEmployee.department}</p>
                 </div>
               </div>
-              <button
-                onClick={() => setShowEmployeeHistory(false)}
-                className="p-2 hover:bg-slate-100 rounded-lg transition"
-              >
-                <X className="w-6 h-6 text-slate-600" />
-              </button>
+              <div className="flex gap-2">
+                {currentUser?.role === "admin" && selectedEmployee.inspections.length > 0 && (
+                  <button
+                    onClick={clearAllInspections}
+                    className="px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Очистити всі
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowEmployeeHistory(false)}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition"
+                >
+                  <X className="w-6 h-6 text-slate-600" />
+                </button>
+              </div>
             </div>
 
             <div className="mb-6">
@@ -649,13 +864,33 @@ export default function EmployeeInspectionSystem() {
                           </span>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-3xl font-black mb-1" style={{ color: getSpeedometerColor(inspection.score) }}>
-                          {inspection.score}%
+                      <div className="flex items-center gap-2">
+                        <div className="text-right">
+                          <div className="text-3xl font-black mb-1" style={{ color: getSpeedometerColor(inspection.score) }}>
+                            {inspection.score}%
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {inspection.errors?.length || 0} з {inspection.totalItems}
+                          </div>
                         </div>
-                        <div className="text-xs text-slate-500">
-                          {inspection.errors?.length || 0} з {inspection.totalItems}
-                        </div>
+                        {canEdit && (
+                          <div className="flex flex-col gap-1">
+                            <button
+                              onClick={() => startEditInspection(inspection, idx)}
+                              className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition"
+                              title="Редагувати"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteInspection(idx)}
+                              className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
+                              title="Видалити"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
