@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserCircle, Plus, CheckCircle2, Circle, Calendar, TrendingUp, X, Edit2, Trash2, Save, LogIn, LogOut, Clock, Filter, Shield, Eye, Database } from 'lucide-react';
+import { UserCircle, Plus, CheckCircle2, Circle, Calendar, TrendingUp, X, Edit2, Trash2, Save, LogIn, LogOut, Clock, Filter, Shield, Eye, Database, MessageSquare, Camera, Image } from 'lucide-react';
 import { db } from './database';
 
 export default function EmployeeInspectionSystem() {
@@ -61,6 +61,13 @@ export default function EmployeeInspectionSystem() {
   // Редагування перевірки
   const [editingInspection, setEditingInspection] = useState(null);
   const [editingInspectionIndex, setEditingInspectionIndex] = useState(null);
+  
+  // Коментарі та фото до пунктів
+  const [inspectionComments, setInspectionComments] = useState({});
+  const [inspectionPhotos, setInspectionPhotos] = useState({});
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [currentCommentIndex, setCurrentCommentIndex] = useState(null);
+  const [currentComment, setCurrentComment] = useState("");
   
   const [newEmployeeName, setNewEmployeeName] = useState("");
   const [newEmployeePosition, setNewEmployeePosition] = useState("");
@@ -155,6 +162,55 @@ export default function EmployeeInspectionSystem() {
     }));
   };
 
+  const openCommentModal = (index) => {
+    setCurrentCommentIndex(index);
+    setCurrentComment(inspectionComments[index] || "");
+    setShowCommentModal(true);
+  };
+
+  const saveComment = () => {
+    if (currentComment.trim()) {
+      setInspectionComments(prev => ({
+        ...prev,
+        [currentCommentIndex]: currentComment.trim()
+      }));
+    } else {
+      // Видаляємо коментар якщо порожній
+      const newComments = { ...inspectionComments };
+      delete newComments[currentCommentIndex];
+      setInspectionComments(newComments);
+    }
+    setShowCommentModal(false);
+    setCurrentComment("");
+    setCurrentCommentIndex(null);
+  };
+
+  const handlePhotoUpload = (index, event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Перевірка розміру (макс 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        alert("Файл занадто великий! Максимум 2MB");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setInspectionPhotos(prev => ({
+          ...prev,
+          [index]: e.target?.result as string
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removePhoto = (index) => {
+    const newPhotos = { ...inspectionPhotos };
+    delete newPhotos[index];
+    setInspectionPhotos(newPhotos);
+  };
+
   const startInspection = (employee) => {
     if (!canEdit) {
       alert("У вас немає прав для проведення перевірок!");
@@ -162,6 +218,8 @@ export default function EmployeeInspectionSystem() {
     }
     setSelectedEmployee(employee);
     setCurrentInspection({});
+    setInspectionComments({});
+    setInspectionPhotos({});
     setActiveView('inspection');
     addToActivityLog("Початок перевірки", `Розпочато перевірку ${employee.name} (${employee.position})`);
   };
@@ -196,7 +254,9 @@ export default function EmployeeInspectionSystem() {
           inspectorRole: currentUser.role,
           checkedItems: { ...currentInspection },
           errors: errors,
-          totalItems: selectedEmployee.checklist.length
+          totalItems: selectedEmployee.checklist.length,
+          comments: { ...inspectionComments },
+          photos: { ...inspectionPhotos }
         }
       ]
     };
@@ -210,6 +270,8 @@ export default function EmployeeInspectionSystem() {
     setActiveView('list');
     setSelectedEmployee(null);
     setCurrentInspection({});
+    setInspectionComments({});
+    setInspectionPhotos({});
   };
 
   const addEmployee = () => {
@@ -899,13 +961,56 @@ export default function EmployeeInspectionSystem() {
                         <p className="text-sm font-bold text-red-600 mb-2">
                           ❌ Виявлені порушення ({inspection.errors.length}):
                         </p>
-                        <div className="space-y-1">
-                          {inspection.errors.map((error, errorIdx) => (
-                            <div key={errorIdx} className="flex items-start gap-2 text-sm">
-                              <span className="text-red-500 font-bold min-w-[1.5rem]">{errorIdx + 1}.</span>
-                              <span className="text-slate-700">{error}</span>
-                            </div>
-                          ))}
+                        <div className="space-y-3">
+                          {inspection.errors.map((error, errorIdx) => {
+                            // Знаходимо індекс пункту в чекліст
+                            const itemIndex = selectedEmployee.checklist.indexOf(error);
+                            const hasComment = inspection.comments && inspection.comments[itemIndex];
+                            const hasPhoto = inspection.photos && inspection.photos[itemIndex];
+                            
+                            return (
+                              <div key={errorIdx} className="border-l-4 border-red-400 pl-3 py-2 bg-red-50 rounded-r">
+                                <div className="flex items-start gap-2 text-sm mb-2">
+                                  <span className="text-red-500 font-bold min-w-[1.5rem]">{errorIdx + 1}.</span>
+                                  <span className="text-slate-700 font-semibold flex-1">{error}</span>
+                                  <div className="flex gap-1">
+                                    {hasComment && (
+                                      <span className="text-blue-600" title="Є коментар">
+                                        <MessageSquare className="w-4 h-4" />
+                                      </span>
+                                    )}
+                                    {hasPhoto && (
+                                      <span className="text-green-600" title="Є фото">
+                                        <Image className="w-4 h-4" />
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                {/* Коментар */}
+                                {hasComment && (
+                                  <div className="ml-7 mt-2 p-2 bg-blue-50 border-l-2 border-blue-400 rounded text-sm text-slate-700">
+                                    <div className="flex items-start gap-2">
+                                      <MessageSquare className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                                      <span>{inspection.comments[itemIndex]}</span>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* Фото */}
+                                {hasPhoto && (
+                                  <div className="ml-7 mt-2">
+                                    <img 
+                                      src={inspection.photos[itemIndex]} 
+                                      alt="Фото порушення" 
+                                      className="max-w-sm rounded-lg shadow-md border-2 border-slate-200 cursor-pointer hover:scale-105 transition"
+                                      onClick={() => window.open(inspection.photos[itemIndex], '_blank')}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     ) : (
@@ -1199,33 +1304,143 @@ export default function EmployeeInspectionSystem() {
             <h3 className="text-xl font-bold text-slate-800 mb-4">Перевірка параметрів</h3>
             <div className="space-y-2">
               {selectedEmployee.checklist.map((item, index) => (
-                <label
+                <div
                   key={index}
-                  className="flex items-center gap-4 p-4 rounded-xl hover:bg-slate-50 cursor-pointer transition-all group"
+                  className="border-2 border-slate-200 rounded-xl p-4 hover:border-blue-300 transition-all"
                 >
-                  <input
-                    type="checkbox"
-                    checked={currentInspection[index] || false}
-                    onChange={() => toggleInspectionItem(index)}
-                    className="hidden"
-                  />
-                  {currentInspection[index] ? (
-                    <CheckCircle2 className="w-6 h-6 text-red-500 flex-shrink-0" />
-                  ) : (
-                    <Circle className="w-6 h-6 text-green-300 group-hover:text-green-400 flex-shrink-0" />
+                  <label className="flex items-center gap-4 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={currentInspection[index] || false}
+                      onChange={() => toggleInspectionItem(index)}
+                      className="hidden"
+                    />
+                    {currentInspection[index] ? (
+                      <CheckCircle2 className="w-6 h-6 text-red-500 flex-shrink-0" />
+                    ) : (
+                      <Circle className="w-6 h-6 text-green-300 hover:text-green-400 flex-shrink-0" />
+                    )}
+                    <span className="text-slate-400 font-semibold text-sm min-w-[2rem]">
+                      {index + 1}
+                    </span>
+                    <span className={`flex-1 font-medium ${
+                      currentInspection[index] ? 'text-red-600 font-bold' : 'text-slate-700'
+                    }`}>
+                      {item}
+                    </span>
+                  </label>
+                  
+                  {/* Кнопки для коментарів та фото */}
+                  <div className="flex gap-2 mt-3 ml-14">
+                    <button
+                      onClick={() => openCommentModal(index)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition ${
+                        inspectionComments[index] 
+                          ? 'bg-blue-100 text-blue-700 border-2 border-blue-300' 
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      {inspectionComments[index] ? 'Є коментар' : 'Коментар'}
+                    </button>
+                    
+                    <label className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold cursor-pointer transition ${
+                      inspectionPhotos[index] 
+                        ? 'bg-green-100 text-green-700 border-2 border-green-300' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}>
+                      <Camera className="w-4 h-4" />
+                      {inspectionPhotos[index] ? 'Є фото' : 'Фото'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handlePhotoUpload(index, e)}
+                        className="hidden"
+                      />
+                    </label>
+                    
+                    {inspectionPhotos[index] && (
+                      <button
+                        onClick={() => removePhoto(index)}
+                        className="px-3 py-2 bg-red-100 text-red-600 rounded-lg text-sm font-semibold hover:bg-red-200 transition"
+                      >
+                        Видалити фото
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Превью коментаря */}
+                  {inspectionComments[index] && (
+                    <div className="mt-3 ml-14 p-3 bg-blue-50 border-l-4 border-blue-400 rounded">
+                      <p className="text-sm text-slate-700">{inspectionComments[index]}</p>
+                    </div>
                   )}
-                  <span className="text-slate-400 font-semibold text-sm min-w-[2rem]">
-                    {index + 1}
-                  </span>
-                  <span className={`flex-1 font-medium ${
-                    currentInspection[index] ? 'text-red-600 font-bold' : 'text-slate-700'
-                  }`}>
-                    {item}
-                  </span>
-                </label>
+                  
+                  {/* Превью фото */}
+                  {inspectionPhotos[index] && (
+                    <div className="mt-3 ml-14">
+                      <img 
+                        src={inspectionPhotos[index]} 
+                        alt="Фото порушення" 
+                        className="max-w-xs rounded-lg shadow-md border-2 border-slate-200"
+                      />
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>
+
+          {/* Модальне вікно для коментаря */}
+          {showCommentModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-slate-800">Додати коментар</h3>
+                  <button
+                    onClick={() => {
+                      setShowCommentModal(false);
+                      setCurrentComment("");
+                    }}
+                    className="p-2 hover:bg-slate-100 rounded-lg transition"
+                  >
+                    <X className="w-5 h-5 text-slate-600" />
+                  </button>
+                </div>
+                
+                <p className="text-sm text-slate-600 mb-3">
+                  {selectedEmployee.checklist[currentCommentIndex]}
+                </p>
+                
+                <textarea
+                  value={currentComment}
+                  onChange={(e) => setCurrentComment(e.target.value)}
+                  placeholder="Опишіть деталі порушення..."
+                  className="w-full p-3 border-2 border-slate-200 rounded-lg focus:border-blue-500 outline-none resize-none"
+                  rows={5}
+                  autoFocus
+                />
+                
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={saveComment}
+                    className="flex-1 bg-blue-500 text-white py-3 rounded-xl font-bold hover:bg-blue-600 transition"
+                  >
+                    Зберегти
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowCommentModal(false);
+                      setCurrentComment("");
+                    }}
+                    className="px-6 bg-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-300 transition"
+                  >
+                    Скасувати
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <button
             onClick={saveInspection}

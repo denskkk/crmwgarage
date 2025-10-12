@@ -30,6 +30,8 @@ export interface Inspection {
   checkedItems: { [key: number]: boolean };
   errors: string[];
   totalItems: number;
+  comments?: { [key: number]: string }; // Коментарі до пунктів
+  photos?: { [key: number]: string }; // Фото до пунктів (base64)
 }
 
 export interface ActivityLog {
