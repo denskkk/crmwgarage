@@ -128,12 +128,22 @@ export default function EmployeeInspectionSystem() {
             // Розпарсити помилки з inspection_items
             const checkedItems: any = {};
             const errors: string[] = [];
+            const comments: any = {};
+            const photos: any = {};
             
             (insp.inspection_items || []).forEach((item: any, index: number) => {
               if (!item.is_checked) {
                 // is_checked = false означає помилка
                 checkedItems[index] = true;
                 errors.push(item.item_name);
+              }
+              
+              // Завантажити коментарі та фото
+              if (item.comment) {
+                comments[index] = item.comment;
+              }
+              if (item.photo_url) {
+                photos[index] = item.photo_url;
               }
             });
 
@@ -146,6 +156,8 @@ export default function EmployeeInspectionSystem() {
               inspectorRole: 'inspector',
               checkedItems: checkedItems,
               errors: errors,
+              comments: comments,
+              photos: photos,
               totalItems: insp.inspection_items?.length || 0,
               status: insp.status
             };
@@ -455,12 +467,39 @@ export default function EmployeeInspectionSystem() {
 
       console.log('✅ Інспекцію збережено в Supabase:', inspection.id);
 
-      // Зберегти пункти чекліста
+      // Зберегти пункти чекліста з коментарями та фото
       if (selectedEmployee.checklist.length > 0) {
+        // Завантажити фото в Supabase Storage (якщо є)
+        const uploadedPhotos: { [key: number]: string } = {};
+        
+        for (const [index, photoData] of Object.entries(inspectionPhotos)) {
+          const idx = parseInt(index);
+          if (photoData && typeof photoData === 'string' && photoData.startsWith('data:')) {
+            try {
+              // Конвертувати base64 в blob
+              const response = await fetch(photoData);
+              const blob = await response.blob();
+              
+              // Згенерувати унікальне ім'я файлу
+              const fileName = `${inspection.id}_item_${idx}_${Date.now()}.jpg`;
+              
+              console.log('📸 Завантаження фото:', fileName);
+              
+              // Завантажити в Storage (поки що зберігаємо base64 в БД)
+              // TODO: Створити bucket в Supabase Storage
+              uploadedPhotos[idx] = photoData; // Тимчасово зберігаємо base64
+            } catch (photoError) {
+              console.error('❌ Помилка завантаження фото:', photoError);
+            }
+          }
+        }
+
         const items = selectedEmployee.checklist.map((item: string, index: number) => ({
           inspection_id: inspection.id,
           item_name: item,
-          is_checked: !currentInspection[index] // true = OK, false = помилка
+          is_checked: !currentInspection[index], // true = OK, false = помилка
+          comment: inspectionComments[index] || null,
+          photo_url: uploadedPhotos[index] || null
         }));
 
         console.log('🔄 Збереження пунктів чекліста:', items.length);
@@ -487,6 +526,8 @@ export default function EmployeeInspectionSystem() {
         inspectorRole: currentUser.role,
         checkedItems: { ...currentInspection },
         errors: errors,
+        comments: { ...inspectionComments },
+        photos: { ...inspectionPhotos },
         totalItems: selectedEmployee.checklist.length,
         status: status
       };
@@ -677,11 +718,13 @@ export default function EmployeeInspectionSystem() {
         .delete()
         .eq('inspection_id', editingInspection.id);
 
-      // Вставити нові inspection_items
+      // Вставити нові inspection_items з коментарями та фото
       const items = selectedEmployee.checklist.map((item: string, index: number) => ({
         inspection_id: editingInspection.id,
         item_name: item,
-        is_checked: !editingInspection.checkedItems[index]
+        is_checked: !editingInspection.checkedItems[index],
+        comment: editingInspection.comments?.[index] || null,
+        photo_url: editingInspection.photos?.[index] || null
       }));
 
       const { error: itemsError } = await supabase
