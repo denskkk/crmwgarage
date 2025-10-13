@@ -1,12 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { UserCircle, Plus, CheckCircle2, Circle, Calendar, TrendingUp, X, Edit2, Trash2, Save, LogIn, LogOut, Clock, Filter, Shield, Eye, Database, MessageSquare, Camera, Image } from 'lucide-react';
 import { db } from './database';
+import { supabase } from './supabaseClient';
 
 export default function EmployeeInspectionSystem() {
   // Завантаження даних з бази
   const [employees, setEmployees] = useState(() => db.getAllEmployees());
   const stats = db.getStatistics();
   
+  // Отримати поточного користувача з Supabase
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Перевірити сесію Supabase при завантаженні
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        // Отримати дані профілю та роль користувача
+        supabase
+          .from('memberships')
+          .select('role')
+          .eq('user_id', session.user.id)
+          .single()
+          .then(({ data: membership }) => {
+            setCurrentUser({
+              id: session.user.id,
+              email: session.user.email,
+              name: session.user.user_metadata?.full_name || session.user.email,
+              role: membership?.role || 'employee'
+            });
+            setLoading(false);
+          });
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // Слухати зміни авторизації
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const { data: membership } = await supabase
+          .from('memberships')
+          .select('role')
+          .eq('user_id', session.user.id)
+          .single();
+        
+        setCurrentUser({
+          id: session.user.id,
+          email: session.user.email,
+          name: session.user.user_metadata?.full_name || session.user.email,
+          role: membership?.role || 'employee'
+        });
+      } else {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   const defaultChecklist = [
     "Привітання клієнта",
     "Консультація за скриптом",
@@ -20,37 +72,9 @@ export default function EmployeeInspectionSystem() {
     "Дотримання техніки безпеки"
   ];
 
-  // Користувачі системи з паролями та ролями
-  const [users] = useState([
-    { username: "admin", password: "admin123", role: "admin", name: "Адміністратор" },
-    { username: "dandali.v@gmail.com", password: "Boss2024", role: "admin", name: "Валерій Іванович" },
-    { username: "viktoria.turuta@gmail.com", password: "Boss2024", role: "admin", name: "Вікторія Олександрівна" },
-    { username: "inspector1", password: "inspect123", role: "inspector", name: "Інспектор 1" },
-    { username: "inspector2", password: "inspect456", role: "inspector", name: "Інспектор 2" },
-    { username: "viewer", password: "view123", role: "viewer", name: "Глядач" }
-  ]);
-
-  // Відновлення сесії користувача з LocalStorage
-  const [currentUser, setCurrentUser] = useState(() => {
-    const savedUser = localStorage.getItem('currentUser');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
-  const [loginUsername, setLoginUsername] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("all");
   const [showActivityLog, setShowActivityLog] = useState(false);
-
   const [activityLog, setActivityLog] = useState([]);
-
-  // Збереження сесії користувача при зміні
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('currentUser', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('currentUser');
-    }
-  }, [currentUser]);
   const [activeView, setActiveView] = useState('list');
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [currentInspection, setCurrentInspection] = useState({});
@@ -98,26 +122,7 @@ export default function EmployeeInspectionSystem() {
     setActivityLog(prev => [logEntry, ...prev]);
   };
 
-  const handleLogin = () => {
-    setLoginError("");
-    // Використовуємо базу даних замість масиву users
-    const user = db.authenticateUser(loginUsername, loginPassword);
-    
-    if (user) {
-      setCurrentUser(user);
-      addToActivityLog("Вхід", `${user.name} (${user.role}) увійшов у систему`);
-      setLoginUsername("");
-      setLoginPassword("");
-    } else {
-      setLoginError("Невірний email або пароль!");
-    }
-  };
-
-  const handleLogout = () => {
-    addToActivityLog("Вихід", `${currentUser.name} вийшов з системи`);
-    setCurrentUser(null);
-    setActiveView('list');
-  };
+  // Вихід видалений - тепер через AppWithAuth кнопку "Вийти"
 
   const calculateOverallScore = (employee) => {
     if (employee.inspections.length === 0) return 100;
@@ -522,79 +527,7 @@ export default function EmployeeInspectionSystem() {
   };
 
   // Login Screen
-  if (!currentUser) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
-          <div className="text-center mb-8">
-            <div className="inline-block p-4 bg-blue-100 rounded-full mb-4">
-              <Shield className="w-12 h-12 text-blue-600" />
-            </div>
-            <h1 className="text-3xl font-black text-slate-800 mb-2">Вхід у систему</h1>
-            <p className="text-slate-600">W-Garage Inspection System</p>
-            <p className="text-sm text-blue-600 mt-2 font-semibold flex items-center justify-center gap-2">
-              <Database className="w-4 h-4" />
-              База: {stats.totalUsers} користувачів, {stats.totalEmployees} співробітників
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Email
-              </label>
-              <input
-                type="email"
-                placeholder="Введіть email"
-                value={loginUsername}
-                onChange={(e) => setLoginUsername(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full p-4 border-2 border-slate-200 rounded-xl focus:border-blue-500 outline-none text-lg"
-                autoFocus
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Пароль
-              </label>
-              <input
-                type="password"
-                placeholder="Введіть пароль"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full p-4 border-2 border-slate-200 rounded-xl focus:border-blue-500 outline-none text-lg"
-              />
-            </div>
-
-            {loginError && (
-              <div className="p-3 bg-red-50 border-2 border-red-200 rounded-xl text-red-600 text-sm font-semibold">
-                {loginError}
-              </div>
-            )}
-
-            <button
-              onClick={handleLogin}
-              className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-lg transition-all"
-            >
-              Увійти
-            </button>
-          </div>
-
-          <div className="mt-6 p-4 bg-slate-50 rounded-xl">
-            <p className="text-xs text-slate-600 mb-2 font-semibold">Акаунти для входу:</p>
-            <div className="space-y-1 text-xs text-slate-500">
-              <p>• admin@wgarage.com / admin123 (адмін)</p>
-              <p>• dandali.v@gmail.com / Boss2024 (Валерій)</p>
-              <p>• viktoria.turuta@gmail.com / Boss2024 (Вікторія)</p>
-              <p className="text-blue-600 font-semibold mt-2">Всього {stats.totalUsers} користувачів в системі</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Форма входу видалена - авторизація тепер через Supabase в AppWithAuth
 
   // Access Management Modal (Admin Only)
   if (showAccessManagement) {
@@ -1503,12 +1436,7 @@ export default function EmployeeInspectionSystem() {
                   Додати
                 </button>
               )}
-              <button
-                onClick={handleLogout}
-                className="bg-red-500 text-white px-4 py-3 rounded-xl font-bold hover:bg-red-600 transition flex items-center gap-2"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
+              {/* Кнопка виходу тепер в AppWithAuth */}
             </div>
           </div>
 
