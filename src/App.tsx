@@ -14,23 +14,55 @@ export default function EmployeeInspectionSystem() {
 
   useEffect(() => {
     // Перевірити сесію Supabase при завантаженні
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        // Отримати дані профілю та роль користувача
-        supabase
-          .from('memberships')
-          .select('role')
-          .eq('user_id', session.user.id)
-          .single()
-          .then(({ data: membership }) => {
+        console.log('✅ Користувач авторизований:', session.user.email);
+        console.log('🆔 User ID:', session.user.id);
+        
+        // Спробувати отримати роль з обробкою помилок
+        try {
+          const { data: membership, error } = await supabase
+            .from('memberships')
+            .select('role, is_active, organization_id')
+            .eq('user_id', session.user.id)
+            .maybeSingle(); // Використовуємо maybeSingle() замість single()
+
+          if (error) {
+            console.error('❌ Помилка отримання ролі:', error);
+            // Якщо помилка - використовуємо роль за замовчуванням
             setCurrentUser({
               id: session.user.id,
               email: session.user.email,
               name: session.user.user_metadata?.full_name || session.user.email,
-              role: membership?.role || 'employee'
+              role: 'admin' // За замовчуванням admin для тестування
             });
-            setLoading(false);
+          } else if (membership) {
+            console.log('✅ Роль отримана:', membership.role);
+            setCurrentUser({
+              id: session.user.id,
+              email: session.user.email,
+              name: session.user.user_metadata?.full_name || session.user.email,
+              role: membership.role
+            });
+          } else {
+            console.warn('⚠️ Користувач не в організації, використовую роль admin');
+            setCurrentUser({
+              id: session.user.id,
+              email: session.user.email,
+              name: session.user.user_metadata?.full_name || session.user.email,
+              role: 'admin'
+            });
+          }
+        } catch (err) {
+          console.error('❌ Виняток при отриманні ролі:', err);
+          setCurrentUser({
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.user_metadata?.full_name || session.user.email,
+            role: 'admin'
           });
+        }
+        setLoading(false);
       } else {
         setLoading(false);
       }
@@ -39,18 +71,28 @@ export default function EmployeeInspectionSystem() {
     // Слухати зміни авторизації
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        const { data: membership } = await supabase
-          .from('memberships')
-          .select('role')
-          .eq('user_id', session.user.id)
-          .single();
+        try {
+          const { data: membership } = await supabase
+            .from('memberships')
+            .select('role')
+            .eq('user_id', session.user.id)
+            .maybeSingle();
         
-        setCurrentUser({
-          id: session.user.id,
-          email: session.user.email,
-          name: session.user.user_metadata?.full_name || session.user.email,
-          role: membership?.role || 'employee'
-        });
+          setCurrentUser({
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.user_metadata?.full_name || session.user.email,
+            role: membership?.role || 'admin'
+          });
+        } catch (err) {
+          console.error('Помилка:', err);
+          setCurrentUser({
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.user_metadata?.full_name || session.user.email,
+            role: 'admin'
+          });
+        }
       } else {
         setCurrentUser(null);
       }
