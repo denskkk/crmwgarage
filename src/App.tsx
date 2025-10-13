@@ -395,23 +395,54 @@ export default function EmployeeInspectionSystem() {
       return;
     }
     
+    console.log('🔍 Початок перевірки для:', employee.name);
+    console.log('📊 Кількість попередніх перевірок:', employee.inspections.length);
+    
     // Якщо є попередні перевірки - завантажити останню як шаблон
     const lastInspection = employee.inspections.length > 0 
       ? employee.inspections[employee.inspections.length - 1] 
       : null;
     
+    if (lastInspection) {
+      console.log('📋 Остання перевірка:', {
+        id: lastInspection.id,
+        score: lastInspection.score,
+        errors: lastInspection.errors,
+        checkedItems: lastInspection.checkedItems,
+        comments: lastInspection.comments,
+        photos: lastInspection.photos
+      });
+    }
+    
     setSelectedEmployee(employee);
     
     // Завантажити помилки з останньої перевірки
-    if (lastInspection && lastInspection.checkedItems) {
-      setCurrentInspection(lastInspection.checkedItems);
-      console.log('📋 Завантажено останню перевірку:', lastInspection.checkedItems);
+    if (lastInspection && lastInspection.checkedItems && Object.keys(lastInspection.checkedItems).length > 0) {
+      setCurrentInspection({ ...lastInspection.checkedItems });
+      console.log('✅ Завантажено checkedItems:', lastInspection.checkedItems);
+      
+      // Завантажити коментарі якщо є
+      if (lastInspection.comments) {
+        setInspectionComments({ ...lastInspection.comments });
+        console.log('✅ Завантажено коментарі:', lastInspection.comments);
+      } else {
+        setInspectionComments({});
+      }
+      
+      // Завантажити фото якщо є
+      if (lastInspection.photos) {
+        setInspectionPhotos({ ...lastInspection.photos });
+        console.log('✅ Завантажено фото:', Object.keys(lastInspection.photos).length, 'шт');
+      } else {
+        setInspectionPhotos({});
+      }
     } else {
+      console.log('⚠️ Немає даних для завантаження, починаємо з чистого аркуша');
       setCurrentInspection({});
+      setInspectionComments({});
+      setInspectionPhotos({});
     }
     
-    setInspectionComments({});
-    setInspectionPhotos({});
     setActiveView('inspection');
     addToActivityLog("Початок перевірки", `Розпочато перевірку ${employee.name} (${employee.position})`);
   };
