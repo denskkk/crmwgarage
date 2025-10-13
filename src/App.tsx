@@ -43,6 +43,9 @@ export default function EmployeeInspectionSystem() {
       const orgId = membership?.organization_id || '6e4d87c7-5fe4-488f-aa55-ec36ae7cd5b7';
 
       console.log('✅ Роль:', userRole, 'Організація:', orgId);
+      console.log('🔍 DEBUG: Email:', session.user.email);
+      console.log('🔍 DEBUG: Role from DB:', userRole);
+      console.log('🔍 DEBUG: Is Admin?', userRole === 'admin');
 
       setCurrentUser({
         id: session.user.id,
@@ -51,6 +54,8 @@ export default function EmployeeInspectionSystem() {
         role: userRole
       });
       setOrganizationId(orgId);
+      
+      console.log('🔍 DEBUG: currentUser set with role:', userRole);
 
       // Завантажити співробітників з Supabase
       await loadEmployees(orgId);
@@ -2022,7 +2027,8 @@ export default function EmployeeInspectionSystem() {
                 </span>
               </div>
               <p className="text-blue-100">
-                {canEdit ? "Контроль якості" : "Тільки перегляд"} • {filteredEmployees.length} співробітників • {currentUser.name}
+                {canEdit ? "Контроль якості" : "Тільки перегляд"} • {filteredEmployees.length} співробітників • {currentUser.name} • 
+                <span className="font-bold ml-1">Роль: {currentUser.role}</span>
               </p>
             </div>
             <div className="flex gap-2">
@@ -2032,23 +2038,23 @@ export default function EmployeeInspectionSystem() {
                   <span className="font-semibold">Режим перегляду</span>
                 </div>
               )}
+              {/* ТИМЧАСОВО: показуємо для всіх щоб протестувати */}
+              <button
+                onClick={openUserManagement}
+                className="group bg-gradient-to-r from-yellow-400 via-orange-400 to-orange-500 text-white px-5 py-3 rounded-xl font-bold hover:from-yellow-500 hover:via-orange-500 hover:to-orange-600 shadow-xl hover:shadow-2xl transition-all flex items-center gap-2 border-2 border-white/30"
+              >
+                <Settings className="w-6 h-6 group-hover-spin" />
+                <span className="text-base">⚙️ Управління</span>
+              </button>
+              
               {currentUser.role === "admin" && (
-                <>
-                  <button
-                    onClick={openUserManagement}
-                    className="group bg-gradient-to-r from-yellow-400 via-orange-400 to-orange-500 text-white px-5 py-3 rounded-xl font-bold hover:from-yellow-500 hover:via-orange-500 hover:to-orange-600 shadow-xl hover:shadow-2xl transition-all flex items-center gap-2 border-2 border-white/30"
-                  >
-                    <Settings className="w-6 h-6 group-hover-spin" />
-                    <span className="text-base">⚙️ Управління</span>
-                  </button>
-                  <button
-                    onClick={() => setShowAccessManagement(true)}
-                    className="bg-white/20 backdrop-blur text-white px-4 py-2 rounded-xl font-bold hover:bg-white/30 transition flex items-center gap-2"
-                  >
-                    <Shield className="w-5 h-5" />
-                    Доступи
-                  </button>
-                </>
+                <button
+                  onClick={() => setShowAccessManagement(true)}
+                  className="bg-white/20 backdrop-blur text-white px-4 py-2 rounded-xl font-bold hover:bg-white/30 transition flex items-center gap-2"
+                >
+                  <Shield className="w-5 h-5" />
+                  Доступи
+                </button>
               )}
               <button
                 onClick={() => setShowActivityLog(true)}
