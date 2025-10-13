@@ -106,6 +106,20 @@ export default function EmployeeInspectionSystem() {
         console.error('❌ Помилка завантаження інспекцій:', error);
       }
 
+      // Дефолтний чекліст для всіх співробітників
+      const defaultChecklist = [
+        "Привітання клієнта",
+        "Консультація за скриптом",
+        "Оформлення документів",
+        "Чистота та порядок",
+        "Форма одягу",
+        "Охайний вигляд",
+        "Ввічливість",
+        "Пунктуальність",
+        "Правдиві звіти",
+        "Дотримання техніки безпеки"
+      ];
+
       // Перетворити в формат для UI
       const employeesData = (profiles || []).map((profile: any) => {
         const empInspections = (inspections || [])
@@ -128,7 +142,7 @@ export default function EmployeeInspectionSystem() {
           name: profile.full_name,
           position: profile.position || 'Співробітник',
           department: profile.department || 'Загальний',
-          checklist: [],
+          checklist: defaultChecklist, // Додали дефолтний чекліст
           inspections: empInspections
         };
       });
