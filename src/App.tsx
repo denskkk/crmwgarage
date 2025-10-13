@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserCircle, Plus, CheckCircle2, Circle, Calendar, TrendingUp, X, Edit2, Trash2, Save, LogIn, LogOut, Clock, Filter, Shield, Eye, Database, MessageSquare, Camera, Image } from 'lucide-react';
+import { UserCircle, Plus, CheckCircle2, Circle, Calendar, TrendingUp, X, Edit2, Trash2, Save, LogIn, LogOut, Clock, Filter, Shield, Eye, Database, MessageSquare, Camera, Image, Settings, Key, Briefcase, Building2, UserCog } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { db } from './database';
 
@@ -229,6 +229,12 @@ export default function EmployeeInspectionSystem() {
   const [showEmployeeHistory, setShowEmployeeHistory] = useState(false);
   const [showAccessManagement, setShowAccessManagement] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Управління користувачами
+  const [showUserManagement, setShowUserManagement] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [editedUserData, setEditedUserData] = useState<any>({});
   
   // Редагування перевірки
   const [editingInspection, setEditingInspection] = useState(null);
@@ -900,6 +906,199 @@ export default function EmployeeInspectionSystem() {
         console.error('❌ Помилка видалення:', err);
         alert('Помилка: ' + err);
       }
+    }
+  };
+
+  // ========== УПРАВЛІННЯ КОРИСТУВАЧАМИ ==========
+  
+  const loadAllUsers = async () => {
+    try {
+      // Завантажити всіх користувачів з профілями
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          full_name,
+          position,
+          department,
+          organization_id
+        `)
+        .order('full_name');
+
+      if (error) throw error;
+
+      // Завантажити ролі з memberships
+      const { data: memberships, error: membError } = await supabase
+        .from('memberships')
+        .select('user_id, role, organization_id');
+
+      if (membError) throw membError;
+
+      // З'єднати дані
+      const usersWithRoles = profiles.map(profile => {
+        const membership = memberships.find(m => m.user_id === profile.id);
+        return {
+          ...profile,
+          role: membership?.role || 'viewer',
+          membershipOrgId: membership?.organization_id
+        };
+      });
+
+      setAllUsers(usersWithRoles);
+      console.log('✅ Завантажено користувачів:', usersWithRoles.length);
+    } catch (err) {
+      console.error('❌ Помилка завантаження користувачів:', err);
+    }
+  };
+
+  const openUserManagement = () => {
+    loadAllUsers();
+    setShowUserManagement(true);
+  };
+
+  const startEditingUser = (user: any) => {
+    setEditingUser(user);
+    setEditedUserData({
+      full_name: user.full_name,
+      position: user.position,
+      department: user.department,
+      role: user.role
+    });
+  };
+
+  const cancelEditingUser = () => {
+    setEditingUser(null);
+    setEditedUserData({});
+  };
+
+  const saveUserChanges = async () => {
+    if (!editingUser) return;
+
+    try {
+      console.log('💾 Збереження змін для користувача:', editingUser.id);
+
+      // Оновити профіль
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          full_name: editedUserData.full_name,
+          position: editedUserData.position,
+          department: editedUserData.department
+        })
+        .eq('id', editingUser.id);
+
+      if (profileError) throw profileError;
+
+      // Оновити роль в memberships
+      const { error: roleError } = await supabase
+        .from('memberships')
+        .update({ role: editedUserData.role })
+        .eq('user_id', editingUser.id)
+        .eq('organization_id', organizationId);
+
+      if (roleError) throw roleError;
+
+      console.log('✅ Дані користувача оновлено');
+      
+      // Перезавантажити список
+      await loadAllUsers();
+      await loadEmployees(organizationId);
+      
+      cancelEditingUser();
+      alert('✅ Зміни збережено!');
+      
+      addToActivityLog("Редагування користувача", `${editedUserData.full_name} - редагував: ${currentUser.name}`);
+    } catch (err) {
+      console.error('❌ Помилка збереження:', err);
+      alert('Помилка: ' + err);
+    }
+  };
+
+  const resetUserPassword = async (user: any) => {
+    try {
+      // Отримати email з auth.users
+      const { data: authUser, error: authError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+
+      if (authError) throw authError;
+
+      // Використати Supabase Auth API для скидання пароля
+      // Потрібно отримати email користувача
+      const email = prompt(`Введіть email користувача ${user.full_name} для скидання паролю:`);
+      
+      if (!email) return;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/reset-password'
+      });
+
+      if (error) throw error;
+
+      alert(`✅ Лист для скидання пароля відправлено на ${email}`);
+      addToActivityLog("Скидання пароля", `${user.full_name} - ініціював: ${currentUser.name}`);
+    } catch (err) {
+      console.error('❌ Помилка скидання пароля:', err);
+      alert('Помилка: ' + err);
+    }
+  };
+
+  const deleteUser = async (user: any) => {
+    if (user.id === currentUser.id) {
+      alert('❌ Ви не можете видалити себе!');
+      return;
+    }
+
+    const confirmed = confirm(`⚠️ УВАГА! Ви впевнені, що хочете видалити користувача ${user.full_name}?\n\nБудуть видалені:\n- Профіль\n- Всі перевірки\n- Членство в організації\n\nЦю дію НЕ можна скасувати!`);
+    
+    if (!confirmed) return;
+
+    try {
+      console.log('🗑️ Видалення користувача:', user.id);
+
+      // 1. Видалити всі inspection_items
+      await supabase
+        .from('inspection_items')
+        .delete()
+        .in('inspection_id', 
+          (await supabase
+            .from('inspections')
+            .select('id')
+            .eq('employee_id', user.id)
+          ).data?.map(i => i.id) || []
+        );
+
+      // 2. Видалити всі inspections
+      await supabase
+        .from('inspections')
+        .delete()
+        .eq('employee_id', user.id);
+
+      // 3. Видалити membership
+      await supabase
+        .from('memberships')
+        .delete()
+        .eq('user_id', user.id);
+
+      // 4. Видалити профіль
+      await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', user.id);
+
+      console.log('✅ Користувача видалено');
+      
+      // Перезавантажити дані
+      await loadAllUsers();
+      await loadEmployees(organizationId);
+      
+      alert('✅ Користувача видалено!');
+      addToActivityLog("Видалення користувача", `${user.full_name} - видалив: ${currentUser.name}`);
+    } catch (err) {
+      console.error('❌ Помилка видалення:', err);
+      alert('Помилка: ' + err);
     }
   };
 
@@ -1834,13 +2033,22 @@ export default function EmployeeInspectionSystem() {
                 </div>
               )}
               {currentUser.role === "admin" && (
-                <button
-                  onClick={() => setShowAccessManagement(true)}
-                  className="bg-white/20 backdrop-blur text-white px-4 py-2 rounded-xl font-bold hover:bg-white/30 transition flex items-center gap-2"
-                >
-                  <Shield className="w-5 h-5" />
-                  Доступи
-                </button>
+                <>
+                  <button
+                    onClick={openUserManagement}
+                    className="bg-white/20 backdrop-blur text-white px-4 py-2 rounded-xl font-bold hover:bg-white/30 transition flex items-center gap-2"
+                  >
+                    <Settings className="w-5 h-5" />
+                    Управління
+                  </button>
+                  <button
+                    onClick={() => setShowAccessManagement(true)}
+                    className="bg-white/20 backdrop-blur text-white px-4 py-2 rounded-xl font-bold hover:bg-white/30 transition flex items-center gap-2"
+                  >
+                    <Shield className="w-5 h-5" />
+                    Доступи
+                  </button>
+                </>
               )}
               <button
                 onClick={() => setShowActivityLog(true)}
@@ -1950,6 +2158,203 @@ export default function EmployeeInspectionSystem() {
             );
           })}
         </div>
+
+        {/* Модальне вікно управління користувачами */}
+        {showUserManagement && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+              {/* Заголовок */}
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Settings className="w-8 h-8" />
+                    <div>
+                      <h2 className="text-2xl font-black">Управління користувачами</h2>
+                      <p className="text-blue-100 text-sm">Редагування доступів, ролей та даних співробітників</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowUserManagement(false)}
+                    className="p-2 hover:bg-white/20 rounded-lg transition"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Таблиця користувачів */}
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="bg-slate-50 rounded-xl overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-slate-200">
+                      <tr>
+                        <th className="text-left p-4 font-bold text-slate-700">ПІБ</th>
+                        <th className="text-left p-4 font-bold text-slate-700">Посада</th>
+                        <th className="text-left p-4 font-bold text-slate-700">Відділ</th>
+                        <th className="text-left p-4 font-bold text-slate-700">Роль</th>
+                        <th className="text-center p-4 font-bold text-slate-700">Дії</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allUsers.map((user) => (
+                        <tr key={user.id} className="border-t border-slate-200 hover:bg-slate-100 transition">
+                          {editingUser?.id === user.id ? (
+                            /* Режим редагування */
+                            <>
+                              <td className="p-4">
+                                <input
+                                  type="text"
+                                  value={editedUserData.full_name}
+                                  onChange={(e) => setEditedUserData({...editedUserData, full_name: e.target.value})}
+                                  className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg outline-none focus:border-blue-500"
+                                />
+                              </td>
+                              <td className="p-4">
+                                <input
+                                  type="text"
+                                  value={editedUserData.position}
+                                  onChange={(e) => setEditedUserData({...editedUserData, position: e.target.value})}
+                                  className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg outline-none focus:border-blue-500"
+                                />
+                              </td>
+                              <td className="p-4">
+                                <select
+                                  value={editedUserData.department}
+                                  onChange={(e) => setEditedUserData({...editedUserData, department: e.target.value})}
+                                  className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg outline-none focus:border-blue-500 bg-white"
+                                >
+                                  {departments.map(dept => (
+                                    <option key={dept} value={dept}>{dept}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="p-4">
+                                <select
+                                  value={editedUserData.role}
+                                  onChange={(e) => setEditedUserData({...editedUserData, role: e.target.value})}
+                                  className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg outline-none focus:border-blue-500 bg-white"
+                                >
+                                  <option value="owner">Owner (Власник)</option>
+                                  <option value="admin">Admin (Адміністратор)</option>
+                                  <option value="manager">Manager (Менеджер)</option>
+                                  <option value="inspector">Inspector (Інспектор)</option>
+                                  <option value="sales">Sales (Продажі)</option>
+                                  <option value="support">Support (Підтримка)</option>
+                                  <option value="employee">Employee (Співробітник)</option>
+                                  <option value="viewer">Viewer (Перегляд)</option>
+                                </select>
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={saveUserChanges}
+                                    className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+                                    title="Зберегти"
+                                  >
+                                    <Save className="w-5 h-5" />
+                                  </button>
+                                  <button
+                                    onClick={cancelEditingUser}
+                                    className="p-2 bg-slate-300 text-slate-700 rounded-lg hover:bg-slate-400 transition"
+                                    title="Скасувати"
+                                  >
+                                    <X className="w-5 h-5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </>
+                          ) : (
+                            /* Режим перегляду */
+                            <>
+                              <td className="p-4">
+                                <div className="flex items-center gap-2">
+                                  <UserCircle className="w-5 h-5 text-blue-500" />
+                                  <span className="font-semibold text-slate-800">{user.full_name}</span>
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center gap-2 text-slate-600">
+                                  <Briefcase className="w-4 h-4" />
+                                  {user.position}
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center gap-2 text-slate-600">
+                                  <Building2 className="w-4 h-4" />
+                                  {user.department}
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <span className={`px-3 py-1 rounded-lg text-xs font-bold ${getRoleBadgeColor(user.role)}`}>
+                                  {getRoleLabel(user.role)}
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => startEditingUser(user)}
+                                    className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition"
+                                    title="Редагувати"
+                                  >
+                                    <Edit2 className="w-5 h-5" />
+                                  </button>
+                                  <button
+                                    onClick={() => resetUserPassword(user)}
+                                    className="p-2 bg-yellow-100 text-yellow-600 rounded-lg hover:bg-yellow-200 transition"
+                                    title="Скинути пароль"
+                                  >
+                                    <Key className="w-5 h-5" />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteUser(user)}
+                                    className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
+                                    title="Видалити користувача"
+                                  >
+                                    <Trash2 className="w-5 h-5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Підказка */}
+                <div className="mt-6 p-4 bg-blue-50 border-l-4 border-blue-400 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <UserCog className="w-5 h-5 text-blue-600 mt-0.5" />
+                    <div className="text-sm text-slate-700">
+                      <p className="font-bold mb-1">Можливості управління:</p>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600">
+                        <li><strong>Редагувати</strong> - зміна ПІБ, посади, відділу та ролі</li>
+                        <li><strong>Скинути пароль</strong> - відправка листа з інструкцією для зміни пароля</li>
+                        <li><strong>Видалити</strong> - повне видалення користувача та всіх його даних</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Футер */}
+              <div className="border-t border-slate-200 p-4 bg-slate-50">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-slate-600">
+                    Всього користувачів: <strong>{allUsers.length}</strong>
+                  </p>
+                  <button
+                    onClick={() => setShowUserManagement(false)}
+                    className="px-6 py-2 bg-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-300 transition"
+                  >
+                    Закрити
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
