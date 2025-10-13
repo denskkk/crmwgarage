@@ -399,79 +399,87 @@ export default function EmployeeInspectionSystem() {
     const status = score >= 80 ? 'passed' : score >= 60 ? 'warning' : 'failed';
     
     try {
-      // Зберегти інспекцію в Supabase
-      const { data: inspection, error: inspError } = await supabase
-        .from('inspections')
-        .insert({
-          organization_id: organizationId,
-          employee_id: selectedEmployee.id,
-          inspector_id: currentUser.id,
-          date: new Date().toISOString(),
-          status: status,
-          score: score,
-          notes: `Помилки: ${errors.join(', ')}`
-        })
-        .select()
-        .single();
+      // Створити тимчасовий ID для локального відображення
+      const tempInspectionId = Date.now();
+      
+      // Оновити локальний список ОДРАЗУ для швидкості
+      const newInspection = {
+        id: tempInspectionId,
+        date: new Date().toLocaleDateString('uk-UA'),
+        time: new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }),
+        score: score,
+        inspector: currentUser.name,
+        inspectorRole: currentUser.role,
+        checkedItems: { ...currentInspection },
+        errors: errors,
+        totalItems: selectedEmployee.checklist.length,
+        status: status
+      };
 
-      if (inspError) {
-        console.error('❌ Помилка збереження інспекції:', inspError);
-        alert('Помилка збереження перевірки: ' + inspError.message);
-        return;
-      }
-
-      // Зберегти пункти чекліста
-      const items = selectedEmployee.checklist.map((item: string, index: number) => ({
-        inspection_id: inspection.id,
-        item_name: item,
-        is_checked: !currentInspection[index] // true якщо все ОК, false якщо помилка
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('inspection_items')
-        .insert(items);
-
-      if (itemsError) {
-        console.error('❌ Помилка збереження пунктів:', itemsError);
-      }
-
-      console.log('✅ Перевірку збережено:', inspection.id);
-
-      // Оновити локальний список
       const updatedEmployee = {
         ...selectedEmployee,
-        inspections: [
-          ...selectedEmployee.inspections,
-          {
-            id: inspection.id,
-            date: new Date().toLocaleDateString('uk-UA'),
-            time: new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }),
-            score: score,
-            inspector: currentUser.name,
-            inspectorRole: currentUser.role,
-            checkedItems: { ...currentInspection },
-            errors: errors,
-            totalItems: selectedEmployee.checklist.length,
-            status: status
-          }
-        ]
+        inspections: [...selectedEmployee.inspections, newInspection]
       };
       
       db.updateEmployee(updatedEmployee);
       setEmployees(db.getAllEmployees());
 
+      // Показати успіх і закрити форму
+      alert('✅ Перевірку збережено локально!');
       addToActivityLog("Завершено перевірку", `${selectedEmployee.name}: ${score}% (${errors.length} помилок, перевіряв: ${currentUser.name})`);
-
-      alert('✅ Перевірку успішно збережено!');
 
       setActiveView('list');
       setSelectedEmployee(null);
       setCurrentInspection({});
       setInspectionComments({});
       setInspectionPhotos({});
+
+      // Спроба зберегти в Supabase в фоні (без блокування UI)
+      console.log('🔄 Збереження в Supabase...');
+      
+      const { data: inspection, error: inspError } = await supabase
+        .from('inspections')
+        .insert({
+          organization_id: organizationId || null,
+          employee_id: selectedEmployee.id,
+          inspector_id: currentUser.id,
+          date: new Date().toISOString(),
+          status: status,
+          score: score,
+          notes: errors.length > 0 ? `Помилки: ${errors.join(', ')}` : 'Без помилок'
+        })
+        .select()
+        .single();
+
+      if (inspError) {
+        console.error('❌ Помилка збереження в Supabase:', inspError);
+        return;
+      }
+
+      console.log('✅ Збережено в Supabase:', inspection.id);
+
+      // Зберегти пункти чекліста
+      if (selectedEmployee.checklist.length > 0) {
+        const items = selectedEmployee.checklist.map((item: string, index: number) => ({
+          inspection_id: inspection.id,
+          item_name: item,
+          is_checked: !currentInspection[index]
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('inspection_items')
+          .insert(items);
+
+        if (itemsError) {
+          console.error('❌ Помилка збереження пунктів:', itemsError);
+        } else {
+          console.log('✅ Збережено пунктів:', items.length);
+        }
+      }
+      
     } catch (err) {
       console.error('❌ Виняток при збереженні:', err);
-      alert('Помилка: ' + err);
+      alert('⚠️ Перевірка збережена локально, але є проблема з синхронізацією в базу даних');
     }
   };
 
