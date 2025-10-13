@@ -382,8 +382,22 @@ export default function EmployeeInspectionSystem() {
       alert("У вас немає прав для проведення перевірок!");
       return;
     }
+    
+    // Якщо є попередні перевірки - завантажити останню як шаблон
+    const lastInspection = employee.inspections.length > 0 
+      ? employee.inspections[employee.inspections.length - 1] 
+      : null;
+    
     setSelectedEmployee(employee);
-    setCurrentInspection({});
+    
+    // Завантажити помилки з останньої перевірки
+    if (lastInspection && lastInspection.checkedItems) {
+      setCurrentInspection(lastInspection.checkedItems);
+      console.log('📋 Завантажено останню перевірку:', lastInspection.checkedItems);
+    } else {
+      setCurrentInspection({});
+    }
+    
     setInspectionComments({});
     setInspectionPhotos({});
     setActiveView('inspection');
@@ -624,7 +638,7 @@ export default function EmployeeInspectionSystem() {
     return total > 0 ? Math.round(((total - errors) / total) * 100) : 100;
   };
 
-  const saveEditedInspection = () => {
+  const saveEditedInspection = async () => {
     const newScore = calculateEditingScore();
     const errors = [];
     
@@ -634,41 +648,63 @@ export default function EmployeeInspectionSystem() {
       }
     });
 
-    const updatedInspection = {
-      ...editingInspection,
-      score: newScore,
-      errors: errors
-    };
+    const status = newScore >= 80 ? 'passed' : newScore >= 60 ? 'warning' : 'failed';
 
-    const updatedInspections = [...selectedEmployee.inspections];
-    const realIndex = selectedEmployee.inspections.length - 1 - editingInspectionIndex;
-    updatedInspections[realIndex] = updatedInspection;
+    try {
+      console.log('🔄 Оновлення перевірки в Supabase:', editingInspection.id);
 
-    const updatedEmployee = {
-      ...selectedEmployee,
-      inspections: updatedInspections
-    };
+      // Оновити inspection в БД
+      const { error: updateError } = await supabase
+        .from('inspections')
+        .update({
+          score: newScore,
+          status: status,
+          notes: errors.length > 0 
+            ? `Помилки: ${errors.join(', ')} | Редагував: ${currentUser.name} о ${new Date().toLocaleString('uk-UA')}`
+            : `Без помилок | Редагував: ${currentUser.name} о ${new Date().toLocaleString('uk-UA')}`
+        })
+        .eq('id', editingInspection.id);
 
-    db.updateEmployee(updatedEmployee);
-    setEmployees(db.getAllEmployees());
-    setSelectedEmployee(updatedEmployee);
-    
-    addToActivityLog("Відредаговано перевірку", `${selectedEmployee.name}: оновлено до ${newScore}% - редагував: ${currentUser.name}`);
-    
-    setEditingInspection(null);
-    setEditingInspectionIndex(null);
-  };
+      if (updateError) {
+        console.error('❌ Помилка оновлення:', updateError);
+        alert('Помилка збереження: ' + updateError.message);
+        return;
+      }
 
-  const deleteInspection = (index) => {
-    if (!canEdit) {
-      alert("У вас немає прав для видалення перевірок!");
-      return;
-    }
+      // Видалити старі inspection_items
+      await supabase
+        .from('inspection_items')
+        .delete()
+        .eq('inspection_id', editingInspection.id);
 
-    const confirmed = confirm("Ви впевнені, що хочете видалити цю перевірку?");
-    if (confirmed) {
-      const realIndex = selectedEmployee.inspections.length - 1 - index;
-      const updatedInspections = selectedEmployee.inspections.filter((_, i) => i !== realIndex);
+      // Вставити нові inspection_items
+      const items = selectedEmployee.checklist.map((item: string, index: number) => ({
+        inspection_id: editingInspection.id,
+        item_name: item,
+        is_checked: !editingInspection.checkedItems[index]
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('inspection_items')
+        .insert(items);
+
+      if (itemsError) {
+        console.error('❌ Помилка оновлення пунктів:', itemsError);
+      }
+
+      console.log('✅ Перевірку оновлено в БД');
+
+      // Оновити локальний кеш
+      const updatedInspection = {
+        ...editingInspection,
+        score: newScore,
+        errors: errors,
+        status: status
+      };
+
+      const updatedInspections = [...selectedEmployee.inspections];
+      const realIndex = selectedEmployee.inspections.length - 1 - editingInspectionIndex;
+      updatedInspections[realIndex] = updatedInspection;
 
       const updatedEmployee = {
         ...selectedEmployee,
@@ -679,7 +715,70 @@ export default function EmployeeInspectionSystem() {
       setEmployees(db.getAllEmployees());
       setSelectedEmployee(updatedEmployee);
       
-      addToActivityLog("Видалено перевірку", `${selectedEmployee.name} - видалив: ${currentUser.name}`);
+      addToActivityLog("Відредаговано перевірку", `${selectedEmployee.name}: оновлено до ${newScore}% - редагував: ${currentUser.name}`);
+      
+      alert('✅ Перевірку успішно оновлено!');
+      
+      setEditingInspection(null);
+      setEditingInspectionIndex(null);
+    } catch (err) {
+      console.error('❌ Виняток:', err);
+      alert('Помилка: ' + err);
+    }
+  };
+
+  const deleteInspection = async (index) => {
+    if (!canEdit) {
+      alert("У вас немає прав для видалення перевірок!");
+      return;
+    }
+
+    const confirmed = confirm("Ви впевнені, що хочете видалити цю перевірку?");
+    if (confirmed) {
+      const realIndex = selectedEmployee.inspections.length - 1 - index;
+      const inspectionToDelete = selectedEmployee.inspections[realIndex];
+
+      try {
+        console.log('🗑️ Видалення перевірки:', inspectionToDelete.id);
+
+        // Видалити inspection_items (CASCADE має спрацювати автоматично, але для надійності)
+        await supabase
+          .from('inspection_items')
+          .delete()
+          .eq('inspection_id', inspectionToDelete.id);
+
+        // Видалити inspection
+        const { error } = await supabase
+          .from('inspections')
+          .delete()
+          .eq('id', inspectionToDelete.id);
+
+        if (error) {
+          console.error('❌ Помилка видалення:', error);
+          alert('Помилка видалення: ' + error.message);
+          return;
+        }
+
+        console.log('✅ Перевірку видалено з БД');
+
+        // Оновити локальний кеш
+        const updatedInspections = selectedEmployee.inspections.filter((_, i) => i !== realIndex);
+
+        const updatedEmployee = {
+          ...selectedEmployee,
+          inspections: updatedInspections
+        };
+
+        db.updateEmployee(updatedEmployee);
+        setEmployees(db.getAllEmployees());
+        setSelectedEmployee(updatedEmployee);
+        
+        addToActivityLog("Видалено перевірку", `${selectedEmployee.name} - видалив: ${currentUser.name}`);
+        alert('✅ Перевірку видалено!');
+      } catch (err) {
+        console.error('❌ Виняток:', err);
+        alert('Помилка: ' + err);
+      }
     }
   };
 
