@@ -96,9 +96,12 @@ export default function EmployeeInspectionSystem() {
           inspector_id,
           inspection_items (
             item_name,
-            is_checked
+            is_checked,
+            comment,
+            photo_url
           )
-        `);
+        `)
+        .order('date', { ascending: true });
         // Тимчасово без фільтра
         // .eq('organization_id', orgId);
 
@@ -174,6 +177,13 @@ export default function EmployeeInspectionSystem() {
       });
 
       console.log('✅ Завантажено співробітників:', employeesData.length);
+      console.log('📊 Перевірок завантажено з БД:', inspections?.length || 0);
+      
+      // Показати деталі перших 3 співробітників з перевірками
+      employeesData.filter(e => e.inspections.length > 0).slice(0, 3).forEach(emp => {
+        console.log(`👤 ${emp.name}: ${emp.inspections.length} перевірок, середній бал: ${emp.inspections.reduce((sum, i) => sum + i.score, 0) / emp.inspections.length}%`);
+      });
+      
       setEmployees(employeesData);
       
       // Зберегти в кеш для db.getAllEmployees()
