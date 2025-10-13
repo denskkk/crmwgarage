@@ -2036,10 +2036,10 @@ export default function EmployeeInspectionSystem() {
                 <>
                   <button
                     onClick={openUserManagement}
-                    className="bg-white/20 backdrop-blur text-white px-4 py-2 rounded-xl font-bold hover:bg-white/30 transition flex items-center gap-2"
+                    className="group bg-gradient-to-r from-yellow-400 via-orange-400 to-orange-500 text-white px-5 py-3 rounded-xl font-bold hover:from-yellow-500 hover:via-orange-500 hover:to-orange-600 shadow-xl hover:shadow-2xl transition-all flex items-center gap-2 border-2 border-white/30"
                   >
-                    <Settings className="w-5 h-5" />
-                    Управління
+                    <Settings className="w-6 h-6 group-hover-spin" />
+                    <span className="text-base">⚙️ Управління</span>
                   </button>
                   <button
                     onClick={() => setShowAccessManagement(true)}
