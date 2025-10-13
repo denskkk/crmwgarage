@@ -149,6 +149,9 @@ export default function EmployeeInspectionSystem() {
 
       console.log('✅ Завантажено співробітників:', employeesData.length);
       setEmployees(employeesData);
+      
+      // Зберегти в кеш для db.getAllEmployees()
+      (db as any)._setEmployees(employeesData);
     } catch (err) {
       console.error('❌ Виняток при завантаженні співробітників:', err);
     }
