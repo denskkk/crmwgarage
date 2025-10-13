@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { User } from '@supabase/supabase-js';
 import { LogIn, LogOut, Loader2 } from 'lucide-react';
+import EmployeeInspectionSystem from './App';
 
 export default function AppWithAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -156,9 +157,6 @@ export default function AppWithAuth() {
   }
 
   // Якщо користувач авторизований - показати старий CRM інтерфейс
-  // Імпортуємо старий компонент
-  const OldApp = require('./App').default;
-  
   return (
     <div className="relative">
       {/* Кнопка виходу поверх інтерфейсу */}
@@ -173,7 +171,7 @@ export default function AppWithAuth() {
       </div>
       
       {/* Показуємо старий CRM інтерфейс */}
-      <OldApp />
+      <EmployeeInspectionSystem />
     </div>
   );
 }
