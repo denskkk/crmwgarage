@@ -107,8 +107,32 @@ export default function EmployeeInspectionSystem() {
     ? employees 
     : employees.filter(e => e.department === selectedDepartment);
 
-  const canEdit = currentUser?.role === "admin" || currentUser?.role === "inspector";
-  const canViewOnly = currentUser?.role === "viewer";
+  const canEdit = currentUser?.role === "owner" || currentUser?.role === "admin" || currentUser?.role === "inspector";
+  const canViewOnly = currentUser?.role === "viewer" || currentUser?.role === "employee";
+
+  // Показати завантаження якщо ще немає користувача
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Завантаження...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Якщо немає користувача після завантаження - показати повідомлення
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Помилка авторизації</h2>
+          <p className="text-gray-600">Не вдалося завантажити дані користувача. Спробуйте оновити сторінку.</p>
+        </div>
+      </div>
+    );
+  }
 
   const addToActivityLog = (action, details) => {
     const logEntry = {
