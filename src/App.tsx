@@ -510,40 +510,30 @@ export default function EmployeeInspectionSystem() {
 
       // Зберегти пункти чекліста з коментарями та фото
       if (selectedEmployee.checklist.length > 0) {
-        // Завантажити фото в Supabase Storage (якщо є)
-        const uploadedPhotos: { [key: number]: string } = {};
+        console.log('📝 Коментарі state:', inspectionComments);
+        console.log('📸 Фото state:', Object.keys(inspectionPhotos).length, 'шт');
         
-        for (const [index, photoData] of Object.entries(inspectionPhotos)) {
-          const idx = parseInt(index);
-          if (photoData && typeof photoData === 'string' && photoData.startsWith('data:')) {
-            try {
-              // Конвертувати base64 в blob
-              const response = await fetch(photoData);
-              const blob = await response.blob();
-              
-              // Згенерувати унікальне ім'я файлу
-              const fileName = `${inspection.id}_item_${idx}_${Date.now()}.jpg`;
-              
-              console.log('📸 Завантаження фото:', fileName);
-              
-              // Завантажити в Storage (поки що зберігаємо base64 в БД)
-              // TODO: Створити bucket в Supabase Storage
-              uploadedPhotos[idx] = photoData; // Тимчасово зберігаємо base64
-            } catch (photoError) {
-              console.error('❌ Помилка завантаження фото:', photoError);
-            }
+        const items = selectedEmployee.checklist.map((item: string, index: number) => {
+          const hasComment = inspectionComments[index];
+          const hasPhoto = inspectionPhotos[index];
+          
+          if (hasComment || hasPhoto) {
+            console.log(`📌 Пункт ${index} (${item}): коментар=${!!hasComment}, фото=${!!hasPhoto}`);
           }
-        }
-
-        const items = selectedEmployee.checklist.map((item: string, index: number) => ({
-          inspection_id: inspection.id,
-          item_name: item,
-          is_checked: !currentInspection[index], // true = OK, false = помилка
-          comment: inspectionComments[index] || null,
-          photo_url: uploadedPhotos[index] || null
-        }));
+          
+          return {
+            inspection_id: inspection.id,
+            item_name: item,
+            is_checked: !currentInspection[index], // true = OK, false = помилка
+            comment: inspectionComments[index] || null,
+            photo_url: inspectionPhotos[index] || null // Зберігаємо base64 напряму
+          };
+        });
 
         console.log('🔄 Збереження пунктів чекліста:', items.length);
+        console.log('📝 Коментарі:', inspectionComments);
+        console.log('📸 Фото:', Object.keys(inspectionPhotos).length, 'шт');
+        console.log('📦 Items для збереження:', items.filter(i => i.comment || i.photo_url));
 
         const { error: itemsError } = await supabase
           .from('inspection_items')
