@@ -71,9 +71,11 @@ export default function EmployeeInspectionSystem() {
           id,
           full_name,
           position,
-          department
+          department,
+          organization_id
         `)
-        .eq('organization_id', orgId)
+        // Тимчасово без фільтра - завантажуємо всіх
+        // .eq('organization_id', orgId)
         .order('full_name');
 
       if (error) {
@@ -96,8 +98,9 @@ export default function EmployeeInspectionSystem() {
             item_name,
             is_checked
           )
-        `)
-        .eq('organization_id', orgId);
+        `);
+        // Тимчасово без фільтра
+        // .eq('organization_id', orgId);
 
       if (inspError) {
         console.error('❌ Помилка завантаження інспекцій:', error);
