@@ -835,17 +835,16 @@ export default function EmployeeInspectionSystem() {
 
         console.log('✅ Перевірку видалено з БД');
 
-        // Оновити локальний кеш
-        const updatedInspections = selectedEmployee.inspections.filter((_, i) => i !== realIndex);
-
-        const updatedEmployee = {
-          ...selectedEmployee,
-          inspections: updatedInspections
-        };
-
-        db.updateEmployee(updatedEmployee);
-        setEmployees(db.getAllEmployees());
-        setSelectedEmployee(updatedEmployee);
+        // ПЕРЕЗАВАНТАЖИТИ дані з БД
+        await loadEmployees(organizationId);
+        
+        // Знайти оновленого співробітника
+        const updatedEmployeesList = db.getAllEmployees();
+        const refreshedEmployee = updatedEmployeesList.find(e => e.id === selectedEmployee.id);
+        
+        if (refreshedEmployee) {
+          setSelectedEmployee(refreshedEmployee);
+        }
         
         addToActivityLog("Видалено перевірку", `${selectedEmployee.name} - видалив: ${currentUser.name}`);
         alert('✅ Перевірку видалено!');
@@ -856,7 +855,7 @@ export default function EmployeeInspectionSystem() {
     }
   };
 
-  const clearAllInspections = () => {
+  const clearAllInspections = async () => {
     if (currentUser?.role !== "admin") {
       alert("Тільки адміністратор може очистити всю історію!");
       return;
@@ -864,16 +863,43 @@ export default function EmployeeInspectionSystem() {
 
     const confirmed = confirm(`Ви впевнені, що хочете видалити ВСІ ${selectedEmployee.inspections.length} перевірок для ${selectedEmployee.name}?`);
     if (confirmed) {
-      const updatedEmployee = {
-        ...selectedEmployee,
-        inspections: []
-      };
-
-      db.updateEmployee(updatedEmployee);
-      setEmployees(db.getAllEmployees());
-      setSelectedEmployee(updatedEmployee);
-      
-      addToActivityLog("Очищено всю історію", `${selectedEmployee.name} - очистив: ${currentUser.name}`);
+      try {
+        console.log(`🗑️ Видалення всіх ${selectedEmployee.inspections.length} перевірок для ${selectedEmployee.name}`);
+        
+        // Видалити всі інспекції цього співробітника з БД
+        for (const inspection of selectedEmployee.inspections) {
+          // Видалити items
+          await supabase
+            .from('inspection_items')
+            .delete()
+            .eq('inspection_id', inspection.id);
+          
+          // Видалити inspection
+          await supabase
+            .from('inspections')
+            .delete()
+            .eq('id', inspection.id);
+        }
+        
+        console.log('✅ Всі перевірки видалено з БД');
+        
+        // ПЕРЕЗАВАНТАЖИТИ дані з БД
+        await loadEmployees(organizationId);
+        
+        // Знайти оновленого співробітника
+        const updatedEmployeesList = db.getAllEmployees();
+        const refreshedEmployee = updatedEmployeesList.find(e => e.id === selectedEmployee.id);
+        
+        if (refreshedEmployee) {
+          setSelectedEmployee(refreshedEmployee);
+        }
+        
+        addToActivityLog("Очищено всю історію", `${selectedEmployee.name} - очистив: ${currentUser.name}`);
+        alert('✅ Всі перевірки видалено!');
+      } catch (err) {
+        console.error('❌ Помилка видалення:', err);
+        alert('Помилка: ' + err);
+      }
     }
   };
 
