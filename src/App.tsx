@@ -1,100 +1,150 @@
 import React, { useState, useEffect } from 'react';
 import { UserCircle, Plus, CheckCircle2, Circle, Calendar, TrendingUp, X, Edit2, Trash2, Save, LogIn, LogOut, Clock, Filter, Shield, Eye, Database, MessageSquare, Camera, Image } from 'lucide-react';
-import { db } from './database';
 import { supabase } from './supabaseClient';
+import { db } from './database';
 
 export default function EmployeeInspectionSystem() {
-  // Завантаження даних з бази
-  const [employees, setEmployees] = useState(() => db.getAllEmployees());
-  const stats = db.getStatistics();
-  
-  // Отримати поточного користувача з Supabase
+  // Стан додатку
+  const [employees, setEmployees] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
 
+  // Завантаження користувача та співробітників
   useEffect(() => {
-    // Перевірити сесію Supabase при завантаженні
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        console.log('✅ Користувач авторизований:', session.user.email);
-        console.log('🆔 User ID:', session.user.id);
-        
-        // Спробувати отримати роль з обробкою помилок
-        try {
-          const { data: membership, error } = await supabase
-            .from('memberships')
-            .select('role, is_active, organization_id')
-            .eq('user_id', session.user.id)
-            .maybeSingle(); // Використовуємо maybeSingle() замість single()
+    loadUserAndData();
+  }, []);
 
-          if (error) {
-            console.error('❌ Помилка отримання ролі:', error);
-            // Якщо помилка - використовуємо роль за замовчуванням
-            setCurrentUser({
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.user_metadata?.full_name || session.user.email,
-              role: 'admin' // За замовчуванням admin для тестування
-            });
-          } else if (membership) {
-            console.log('✅ Роль отримана:', membership.role);
-            setCurrentUser({
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.user_metadata?.full_name || session.user.email,
-              role: membership.role
-            });
-          } else {
-            console.warn('⚠️ Користувач не в організації, використовую роль admin');
-            setCurrentUser({
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.user_metadata?.full_name || session.user.email,
-              role: 'admin'
-            });
-          }
-        } catch (err) {
-          console.error('❌ Виняток при отриманні ролі:', err);
-          setCurrentUser({
-            id: session.user.id,
-            email: session.user.email,
-            name: session.user.user_metadata?.full_name || session.user.email,
-            role: 'admin'
-          });
-        }
+  async function loadUserAndData() {
+    try {
+      // Перевірити сесію Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.user) {
         setLoading(false);
-      } else {
-        setLoading(false);
+        return;
       }
-    });
 
-    // Слухати зміни авторизації
+      console.log('✅ Користувач авторизований:', session.user.email);
+      console.log('🆔 User ID:', session.user.id);
+      
+      // Отримати роль та організацію
+      const { data: membership, error: membershipError } = await supabase
+        .from('memberships')
+        .select('role, organization_id')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      if (membershipError) {
+        console.error('❌ Помилка отримання ролі:', membershipError);
+      }
+
+      const userRole = membership?.role || 'admin';
+      const orgId = membership?.organization_id || '6e4d87c7-5fe4-488f-aa55-ec36ae7cd5b7';
+
+      console.log('✅ Роль:', userRole, 'Організація:', orgId);
+
+      setCurrentUser({
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.user_metadata?.full_name || session.user.email,
+        role: userRole
+      });
+      setOrganizationId(orgId);
+
+      // Завантажити співробітників з Supabase
+      await loadEmployees(orgId);
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('❌ Помилка завантаження:', err);
+      setLoading(false);
+    }
+  }
+
+  // Завантажити співробітників з profiles
+  async function loadEmployees(orgId: string) {
+    try {
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          full_name,
+          position,
+          department
+        `)
+        .eq('organization_id', orgId)
+        .order('full_name');
+
+      if (error) {
+        console.error('❌ Помилка завантаження співробітників:', error);
+        return;
+      }
+
+      // Завантажити інспекції для кожного співробітника
+      const { data: inspections, error: inspError } = await supabase
+        .from('inspections')
+        .select(`
+          id,
+          employee_id,
+          date,
+          status,
+          score,
+          notes,
+          inspector_id,
+          inspection_items (
+            item_name,
+            is_checked
+          )
+        `)
+        .eq('organization_id', orgId);
+
+      if (inspError) {
+        console.error('❌ Помилка завантаження інспекцій:', error);
+      }
+
+      // Перетворити в формат для UI
+      const employeesData = (profiles || []).map((profile: any) => {
+        const empInspections = (inspections || [])
+          .filter((insp: any) => insp.employee_id === profile.id)
+          .map((insp: any) => ({
+            id: insp.id,
+            date: new Date(insp.date).toLocaleDateString('uk-UA'),
+            time: new Date(insp.date).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }),
+            score: insp.score,
+            inspector: '', // Буде заповнено пізніше
+            inspectorRole: '',
+            checkedItems: {},
+            errors: [],
+            totalItems: insp.inspection_items?.length || 0,
+            status: insp.status
+          }));
+
+        return {
+          id: profile.id,
+          name: profile.full_name,
+          position: profile.position || 'Співробітник',
+          department: profile.department || 'Загальний',
+          checklist: [],
+          inspections: empInspections
+        };
+      });
+
+      console.log('✅ Завантажено співробітників:', employeesData.length);
+      setEmployees(employeesData);
+    } catch (err) {
+      console.error('❌ Виняток при завантаженні співробітників:', err);
+    }
+  }
+
+  // Слухати зміни авторизації
+  useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        try {
-          const { data: membership } = await supabase
-            .from('memberships')
-            .select('role')
-            .eq('user_id', session.user.id)
-            .maybeSingle();
-        
-          setCurrentUser({
-            id: session.user.id,
-            email: session.user.email,
-            name: session.user.user_metadata?.full_name || session.user.email,
-            role: membership?.role || 'admin'
-          });
-        } catch (err) {
-          console.error('Помилка:', err);
-          setCurrentUser({
-            id: session.user.id,
-            email: session.user.email,
-            name: session.user.user_metadata?.full_name || session.user.email,
-            role: 'admin'
-          });
-        }
+        loadUserAndData();
       } else {
         setCurrentUser(null);
+        setEmployees([]);
       }
     });
 
