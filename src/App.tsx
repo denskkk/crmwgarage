@@ -124,18 +124,32 @@ export default function EmployeeInspectionSystem() {
       const employeesData = (profiles || []).map((profile: any) => {
         const empInspections = (inspections || [])
           .filter((insp: any) => insp.employee_id === profile.id)
-          .map((insp: any) => ({
-            id: insp.id,
-            date: new Date(insp.date).toLocaleDateString('uk-UA'),
-            time: new Date(insp.date).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }),
-            score: insp.score,
-            inspector: '', // Буде заповнено пізніше
-            inspectorRole: '',
-            checkedItems: {},
-            errors: [],
-            totalItems: insp.inspection_items?.length || 0,
-            status: insp.status
-          }));
+          .map((insp: any) => {
+            // Розпарсити помилки з inspection_items
+            const checkedItems: any = {};
+            const errors: string[] = [];
+            
+            (insp.inspection_items || []).forEach((item: any, index: number) => {
+              if (!item.is_checked) {
+                // is_checked = false означає помилка
+                checkedItems[index] = true;
+                errors.push(item.item_name);
+              }
+            });
+
+            return {
+              id: insp.id,
+              date: new Date(insp.date).toLocaleDateString('uk-UA'),
+              time: new Date(insp.date).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }),
+              score: insp.score,
+              inspector: 'Інспектор', // TODO: Завантажити з auth.users
+              inspectorRole: 'inspector',
+              checkedItems: checkedItems,
+              errors: errors,
+              totalItems: insp.inspection_items?.length || 0,
+              status: insp.status
+            };
+          });
 
         return {
           id: profile.id,
