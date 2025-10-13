@@ -107,8 +107,19 @@ export default function EmployeeInspectionSystem() {
     ? employees 
     : employees.filter(e => e.department === selectedDepartment);
 
-  const canEdit = currentUser?.role === "owner" || currentUser?.role === "admin" || currentUser?.role === "inspector";
-  const canViewOnly = currentUser?.role === "viewer" || currentUser?.role === "employee";
+  // Права доступу на основі ролей Supabase
+  const canEdit = ['owner', 'admin', 'manager', 'inspector'].includes(currentUser?.role || '');
+  const canViewOnly = ['viewer', 'employee'].includes(currentUser?.role || '');
+  const isAdmin = ['owner', 'admin'].includes(currentUser?.role || '');
+
+  console.log('👤 Current user:', {
+    email: currentUser?.email,
+    name: currentUser?.name,
+    role: currentUser?.role,
+    canEdit,
+    canViewOnly,
+    isAdmin
+  });
 
   // Показати завантаження якщо ще немає користувача
   if (loading) {
