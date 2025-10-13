@@ -381,11 +381,13 @@ export default function EmployeeInspectionSystem() {
     setShowEmployeeHistory(true);
   };
 
-  const saveInspection = () => {
+  const saveInspection = async () => {
+    if (!canEdit) {
+      alert('У вас немає прав для створення перевірок');
+      return;
+    }
+
     const score = calculateCurrentScore();
-    const today = new Date().toISOString().split('T')[0];
-    const time = new Date().toLocaleTimeString('uk-UA');
-    
     const errors = [];
     Object.keys(currentInspection).forEach(index => {
       if (currentInspection[index]) {
@@ -393,37 +395,84 @@ export default function EmployeeInspectionSystem() {
       }
     });
     
-    const updatedEmployee = {
-      ...selectedEmployee,
-      inspections: [
-        ...selectedEmployee.inspections,
-        {
-          id: `${Date.now()}`,
-          date: today,
-          time: time,
-          score: score,
-          inspector: currentUser.name,
-          inspectorRole: currentUser.role,
-          checkedItems: { ...currentInspection },
-          errors: errors,
-          totalItems: selectedEmployee.checklist.length,
-          comments: { ...inspectionComments },
-          photos: { ...inspectionPhotos }
-        }
-      ]
-    };
+    // Визначаємо статус
+    const status = score >= 80 ? 'passed' : score >= 60 ? 'warning' : 'failed';
     
-    // Оновлюємо в базі даних
-    db.updateEmployee(updatedEmployee);
-    setEmployees(db.getAllEmployees());
+    try {
+      // Зберегти інспекцію в Supabase
+      const { data: inspection, error: inspError } = await supabase
+        .from('inspections')
+        .insert({
+          organization_id: organizationId,
+          employee_id: selectedEmployee.id,
+          inspector_id: currentUser.id,
+          date: new Date().toISOString(),
+          status: status,
+          score: score,
+          notes: `Помилки: ${errors.join(', ')}`
+        })
+        .select()
+        .single();
 
-    addToActivityLog("Завершено перевірку", `${selectedEmployee.name}: ${score}% (${errors.length} помилок, перевіряв: ${currentUser.name})`);
+      if (inspError) {
+        console.error('❌ Помилка збереження інспекції:', inspError);
+        alert('Помилка збереження перевірки: ' + inspError.message);
+        return;
+      }
 
-    setActiveView('list');
-    setSelectedEmployee(null);
-    setCurrentInspection({});
-    setInspectionComments({});
-    setInspectionPhotos({});
+      // Зберегти пункти чекліста
+      const items = selectedEmployee.checklist.map((item: string, index: number) => ({
+        inspection_id: inspection.id,
+        item_name: item,
+        is_checked: !currentInspection[index] // true якщо все ОК, false якщо помилка
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('inspection_items')
+        .insert(items);
+
+      if (itemsError) {
+        console.error('❌ Помилка збереження пунктів:', itemsError);
+      }
+
+      console.log('✅ Перевірку збережено:', inspection.id);
+
+      // Оновити локальний список
+      const updatedEmployee = {
+        ...selectedEmployee,
+        inspections: [
+          ...selectedEmployee.inspections,
+          {
+            id: inspection.id,
+            date: new Date().toLocaleDateString('uk-UA'),
+            time: new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }),
+            score: score,
+            inspector: currentUser.name,
+            inspectorRole: currentUser.role,
+            checkedItems: { ...currentInspection },
+            errors: errors,
+            totalItems: selectedEmployee.checklist.length,
+            status: status
+          }
+        ]
+      };
+      
+      db.updateEmployee(updatedEmployee);
+      setEmployees(db.getAllEmployees());
+
+      addToActivityLog("Завершено перевірку", `${selectedEmployee.name}: ${score}% (${errors.length} помилок, перевіряв: ${currentUser.name})`);
+
+      alert('✅ Перевірку успішно збережено!');
+
+      setActiveView('list');
+      setSelectedEmployee(null);
+      setCurrentInspection({});
+      setInspectionComments({});
+      setInspectionPhotos({});
+    } catch (err) {
+      console.error('❌ Виняток при збереженні:', err);
+      alert('Помилка: ' + err);
+    }
   };
 
   const addEmployee = () => {
