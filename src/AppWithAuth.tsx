@@ -155,57 +155,25 @@ export default function AppWithAuth() {
     );
   }
 
-  // Якщо користувач авторизований - показати дашборд
+  // Якщо користувач авторизований - показати старий CRM інтерфейс
+  // Імпортуємо старий компонент
+  const OldApp = require('./App').default;
+  
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-xl shadow-lg p-8">
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800">Вітаємо в W-Garage CRM!</h1>
-              <p className="text-gray-600 mt-2">Email: {user.email}</p>
-              <p className="text-sm text-gray-500">ID: {user.id}</p>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
-            >
-              <LogOut className="w-4 h-4" />
-              Вийти
-            </button>
-          </div>
-
-          <div className="bg-green-50 border border-green-200 rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-green-800 mb-4">
-              ✅ Авторизація працює!
-            </h2>
-            <div className="space-y-2 text-sm text-gray-700">
-              <p><strong>Що працює:</strong></p>
-              <ul className="list-disc list-inside space-y-1 ml-4">
-                <li>✅ Підключення до Supabase</li>
-                <li>✅ Авторизація через email/password</li>
-                <li>✅ Збереження сесії</li>
-                <li>✅ 34 користувачі в базі даних</li>
-              </ul>
-              
-              <p className="mt-4"><strong>Наступні кроки:</strong></p>
-              <ul className="list-disc list-inside space-y-1 ml-4">
-                <li>Імпортувати старий App.tsx функціонал</li>
-                <li>Підключити таблиці companies, contacts, deals</li>
-                <li>Додати створення інспекцій через Supabase</li>
-                <li>Налаштувати ролі (owner/admin/inspector/employee)</li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="font-semibold text-blue-800 mb-2">User Metadata:</h3>
-            <pre className="text-xs bg-white p-3 rounded overflow-auto">
-              {JSON.stringify(user, null, 2)}
-            </pre>
-          </div>
-        </div>
+    <div className="relative">
+      {/* Кнопка виходу поверх інтерфейсу */}
+      <div className="fixed top-4 right-4 z-50">
+        <button
+          onClick={handleLogout}
+          className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center gap-2 shadow-lg"
+        >
+          <LogOut className="w-4 h-4" />
+          Вийти
+        </button>
       </div>
+      
+      {/* Показуємо старий CRM інтерфейс */}
+      <OldApp />
     </div>
   );
 }
