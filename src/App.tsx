@@ -242,6 +242,8 @@ export default function EmployeeInspectionSystem() {
   const [showEmployeeHistory, setShowEmployeeHistory] = useState(false);
   const [showAccessManagement, setShowAccessManagement] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showBinotelReport, setShowBinotelReport] = useState(false);
+  const [binotelHtml, setBinotelHtml] = useState<string | null>(null);
   
   // Управління користувачами
   const [showUserManagement, setShowUserManagement] = useState(false);
@@ -310,6 +312,24 @@ export default function EmployeeInspectionSystem() {
         </div>
       </div>
     );
+  }
+
+  async function openLatestBinotelReport() {
+    try {
+      setShowBinotelReport(true);
+      setBinotelHtml(null);
+      const { data, error } = await supabase
+        .from('binotel_reports')
+        .select('html')
+        .eq('organization_id', organizationId)
+        .order('report_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      setBinotelHtml(data?.html || '<div style="padding:16px">Звітів ще немає</div>');
+    } catch (e:any) {
+      alert('Помилка завантаження звіту: ' + e.message);
+    }
   }
 
   const addToActivityLog = (action, details) => {
@@ -2052,6 +2072,12 @@ export default function EmployeeInspectionSystem() {
                 <Settings className="w-6 h-6 group-hover-spin" />
                 <span className="text-base">⚙️ Управління</span>
               </button>
+              <button
+                onClick={openLatestBinotelReport}
+                className="bg-white text-purple-700 px-4 py-2 rounded-xl font-bold hover:bg-purple-50 transition flex items-center gap-2"
+              >
+                Звіт дзвінків
+              </button>
               
               {currentUser.role === "admin" && (
                 <button
@@ -2364,6 +2390,17 @@ export default function EmployeeInspectionSystem() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+        {showBinotelReport && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-auto">
+              <div className="flex items-center justify-between p-4 border-b">
+                <h3 className="text-xl font-bold">Щоденний звіт дзвінків (Binotel)</h3>
+                <button onClick={()=>setShowBinotelReport(false)} className="p-2 hover:bg-slate-100 rounded-lg">✕</button>
+              </div>
+              <div className="p-4" dangerouslySetInnerHTML={{ __html: binotelHtml || '<div>Завантаження...</div>' }} />
             </div>
           </div>
         )}

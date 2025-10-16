@@ -7,14 +7,18 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "migrate": "tsx scripts/migrate-users.ts"
+    "migrate": "tsx scripts/migrate-users.ts",
+    "binotel:daily": "tsx scripts/binotel-daily-summary.ts",
+    "binotel:generate": "tsx scripts/binotel-generate-report.ts",
+    "db:add-binotel-reports": "echo Apply add-binotel-reports.sql in Supabase SQL editor"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@types/react": "^19.2.2",
+  "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
+  "@types/node": "^22.7.6",
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",
