@@ -438,7 +438,11 @@ export default function EmployeeInspectionSystem() {
   };
 
   const viewEmployeeHistory = (employee) => {
-    setSelectedEmployee(employee);
+    // Підстраховка: показуємо тільки останню перевірку навіть якщо у стані їх більше
+    const latestOnly = employee.inspections && employee.inspections.length > 1
+      ? employee.inspections.slice(-1)
+      : employee.inspections;
+    setSelectedEmployee({ ...employee, inspections: latestOnly });
     setShowEmployeeHistory(true);
   };
 
@@ -551,7 +555,14 @@ export default function EmployeeInspectionSystem() {
       };
       
       db.updateEmployee(updatedEmployee);
-      setEmployees(db.getAllEmployees());
+      // Підстраховка: гарантуємо що в списку у кожного співробітника не більше 1 перевірки
+      const normalized = db.getAllEmployees().map(e =>
+        e.id === updatedEmployee.id
+          ? { ...updatedEmployee, inspections: updatedEmployee.inspections.slice(-1) }
+          : { ...e, inspections: (e.inspections || []).slice(-1) }
+      );
+      (db as any)._setEmployees(normalized);
+      setEmployees(normalized);
 
       // Показати успіх
       alert('✅ Перевірку успішно збережено в базу даних!');
@@ -2106,7 +2117,7 @@ export default function EmployeeInspectionSystem() {
                 <div className="mt-3 p-2 bg-slate-50 rounded-lg text-xs">
                   <div className="flex items-center gap-2 text-slate-600 mb-1">
                     <Calendar className="w-3 h-3" />
-                    <span>Перевірок: {employee.inspections.length}</span>
+                    <span>Перевірок: {Math.min(employee.inspections.length, 1)}</span>
                   </div>
                   {employee.inspections.length > 0 && (
                     <div className="text-slate-500 truncate">
