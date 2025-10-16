@@ -128,48 +128,56 @@ export default function EmployeeInspectionSystem() {
         "Дотримання техніки безпеки"
       ];
 
-      // Перетворити в формат для UI
+      // Перетворити в формат для UI (тільки остання перевірка на співробітника)
       const employeesData = (profiles || []).map((profile: any) => {
-        const empInspections = (inspections || [])
+        const empAllInspections = (inspections || [])
           .filter((insp: any) => insp.employee_id === profile.id)
-          .map((insp: any) => {
-            // Розпарсити помилки з inspection_items
-            const checkedItems: any = {};
-            const errors: string[] = [];
-            const comments: any = {};
-            const photos: any = {};
-            
-            (insp.inspection_items || []).forEach((item: any, index: number) => {
-              if (!item.is_checked) {
-                // is_checked = false означає помилка
-                checkedItems[index] = true;
-                errors.push(item.item_name);
-              }
-              
-              // Завантажити коментарі та фото
-              if (item.comment) {
-                comments[index] = item.comment;
-              }
-              if (item.photo_url) {
-                photos[index] = item.photo_url;
-              }
-            });
+          .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-            return {
-              id: insp.id,
-              date: new Date(insp.date).toLocaleDateString('uk-UA'),
-              time: new Date(insp.date).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }),
-              score: insp.score,
-              inspector: 'Інспектор', // TODO: Завантажити з auth.users
-              inspectorRole: 'inspector',
-              checkedItems: checkedItems,
-              errors: errors,
-              comments: comments,
-              photos: photos,
-              totalItems: insp.inspection_items?.length || 0,
-              status: insp.status
-            };
+        const latestInsp = empAllInspections.length > 0
+          ? empAllInspections[empAllInspections.length - 1]
+          : null;
+
+        let empInspections: any[] = [];
+        if (latestInsp) {
+          // Розпарсити помилки з inspection_items
+          const checkedItems: any = {};
+          const errors: string[] = [];
+          const comments: any = {};
+          const photos: any = {};
+
+          (latestInsp.inspection_items || []).forEach((item: any, index: number) => {
+            if (!item.is_checked) {
+              // is_checked = false означає помилка
+              checkedItems[index] = true;
+              errors.push(item.item_name);
+            }
+
+            // Завантажити коментарі та фото
+            if (item.comment) {
+              comments[index] = item.comment;
+            }
+            if (item.photo_url) {
+              photos[index] = item.photo_url;
+            }
           });
+
+          empInspections = [{
+            id: latestInsp.id,
+            date: new Date(latestInsp.date).toLocaleDateString('uk-UA'),
+            time: new Date(latestInsp.date).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }),
+            score: latestInsp.score,
+            inspector: 'Інспектор', // TODO: Завантажити з auth.users
+            inspectorRole: 'inspector',
+            inspector_id: latestInsp.inspector_id,
+            checkedItems: checkedItems,
+            errors: errors,
+            comments: comments,
+            photos: photos,
+            totalItems: latestInsp.inspection_items?.length || 0,
+            status: latestInsp.status
+          }];
+        }
 
         return {
           id: profile.id,
@@ -419,50 +427,11 @@ export default function EmployeeInspectionSystem() {
     console.log('🔍 Початок перевірки для:', employee.name);
     console.log('📊 Кількість попередніх перевірок:', employee.inspections.length);
     
-    // Якщо є попередні перевірки - завантажити останню як шаблон
-    const lastInspection = employee.inspections.length > 0 
-      ? employee.inspections[employee.inspections.length - 1] 
-      : null;
-    
-    if (lastInspection) {
-      console.log('📋 Остання перевірка:', {
-        id: lastInspection.id,
-        score: lastInspection.score,
-        errors: lastInspection.errors,
-        checkedItems: lastInspection.checkedItems,
-        comments: lastInspection.comments,
-        photos: lastInspection.photos
-      });
-    }
-    
+    // Завжди починати з чистого аркуша (не підвантажувати попередню)
     setSelectedEmployee(employee);
-    
-    // Завантажити помилки з останньої перевірки
-    if (lastInspection && lastInspection.checkedItems && Object.keys(lastInspection.checkedItems).length > 0) {
-      setCurrentInspection({ ...lastInspection.checkedItems });
-      console.log('✅ Завантажено checkedItems:', lastInspection.checkedItems);
-      
-      // Завантажити коментарі якщо є
-      if (lastInspection.comments) {
-        setInspectionComments({ ...lastInspection.comments });
-        console.log('✅ Завантажено коментарі:', lastInspection.comments);
-      } else {
-        setInspectionComments({});
-      }
-      
-      // Завантажити фото якщо є
-      if (lastInspection.photos) {
-        setInspectionPhotos({ ...lastInspection.photos });
-        console.log('✅ Завантажено фото:', Object.keys(lastInspection.photos).length, 'шт');
-      } else {
-        setInspectionPhotos({});
-      }
-    } else {
-      console.log('⚠️ Немає даних для завантаження, починаємо з чистого аркуша');
-      setCurrentInspection({});
-      setInspectionComments({});
-      setInspectionPhotos({});
-    }
+    setCurrentInspection({});
+    setInspectionComments({});
+    setInspectionPhotos({});
     
     setActiveView('inspection');
     addToActivityLog("Початок перевірки", `Розпочато перевірку ${employee.name} (${employee.position})`);
@@ -566,6 +535,7 @@ export default function EmployeeInspectionSystem() {
         score: score,
         inspector: currentUser.name,
         inspectorRole: currentUser.role,
+        inspector_id: currentUser.id,
         checkedItems: { ...currentInspection },
         errors: errors,
         comments: { ...inspectionComments },
@@ -574,9 +544,10 @@ export default function EmployeeInspectionSystem() {
         status: status
       };
 
+      // Зберігаємо ТІЛЬКИ останню перевірку (історія = 1)
       const updatedEmployee = {
         ...selectedEmployee,
-        inspections: [...selectedEmployee.inspections, newInspection]
+        inspections: [newInspection]
       };
       
       db.updateEmployee(updatedEmployee);
@@ -700,6 +671,11 @@ export default function EmployeeInspectionSystem() {
       alert("У вас немає прав для редагування перевірок!");
       return;
     }
+    // Редагувати може лише той, хто створив перевірку
+    if (inspection.inspector_id && inspection.inspector_id !== currentUser.id) {
+      alert('Тільки користувач, який проводив цю перевірку, може її редагувати');
+      return;
+    }
     setEditingInspection({ ...inspection });
     setEditingInspectionIndex(index);
   };
@@ -722,6 +698,11 @@ export default function EmployeeInspectionSystem() {
   };
 
   const saveEditedInspection = async () => {
+    // Захист: дозволити редагування лише автору перевірки
+    if (editingInspection?.inspector_id && editingInspection.inspector_id !== currentUser.id) {
+      alert('Тільки користувач, який проводив цю перевірку, може її редагувати');
+      return;
+    }
     const newScore = calculateEditingScore();
     const errors = [];
     
@@ -1494,7 +1475,7 @@ export default function EmployeeInspectionSystem() {
                             {inspection.errors?.length || 0} з {inspection.totalItems}
                           </div>
                         </div>
-                        {canEdit && (
+                        {canEdit && inspection.inspector_id === currentUser.id && (
                           <div className="flex flex-col gap-1">
                             <button
                               onClick={() => startEditInspection(inspection, idx)}
@@ -1503,13 +1484,15 @@ export default function EmployeeInspectionSystem() {
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => deleteInspection(idx)}
-                              className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
-                              title="Видалити"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {currentUser.role === 'admin' && (
+                              <button
+                                onClick={() => deleteInspection(idx)}
+                                className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
+                                title="Видалити"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
