@@ -469,7 +469,19 @@ export default function EmployeeInspectionSystem() {
       console.log('Employee ID:', selectedEmployee.id);
       console.log('Inspector ID:', currentUser.id);
       
-      // СПОЧАТКУ зберегти в Supabase
+      // 0) Видалити попередні інспекції цього співробітника (щоб у БД була тільки 1)
+      console.log('🧹 Видалення попередніх перевірок співробітника перед створенням нової...');
+      const { error: delError } = await supabase
+        .from('inspections')
+        .delete()
+        .eq('employee_id', selectedEmployee.id);
+
+      if (delError) {
+        console.warn('⚠️ Не вдалося видалити попередні перевірки (перевірте RLS delete):', delError.message);
+        // Не припиняємо процес: спробуємо вставити нову перевірку, але може виникнути логічна дубльованість без унікального індексу
+      }
+
+      // 1) Зберегти нову інспекцію в Supabase
       const { data: inspection, error: inspError } = await supabase
         .from('inspections')
         .insert({
